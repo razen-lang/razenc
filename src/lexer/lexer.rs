@@ -301,7 +301,7 @@ impl<'a> Lexer<'a> {
                 '/' => TokenKind::Slash,
                 '%' => TokenKind::Percent,
                 '&' => TokenKind::And,
-                '|' => TokenKind::Or,
+                '|' => TokenKind::Pipe,
                 '^' => TokenKind::Caret,
                 '~' => TokenKind::Tilde,
                 '=' => TokenKind::Assign,

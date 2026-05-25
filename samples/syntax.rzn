@@ -23,7 +23,7 @@ match_example :: fn(val: i32) -> str {
 }
 
 // FatArrow in match
-}
+
 
 loop_example :: fn() -> void {
     mut i := 0

@@ -1284,7 +1284,8 @@ fn infix_bp(kind: &TokenKind) -> Option<(u8, u8)> {
         TokenKind::OrOr => Some((3, 4)),
                 TokenKind::AndAnd => Some((5, 6)),
 
-        TokenKind::Or => Some((7, 8)),
+        // Pipe removed: conflicts with capture syntax |name| in loops/matches
+        // Bitwise OR using | between expressions is not yet supported.
         TokenKind::Caret => Some((9, 10)),
         TokenKind::And => Some((11, 12)),
 
@@ -1326,7 +1327,7 @@ impl Parser {
             Some(TokenKind::AndAnd) => BinaryOp::And,
             Some(TokenKind::OrOr) => BinaryOp::Or,
             Some(TokenKind::And) => BinaryOp::BitAnd,
-            Some(TokenKind::Or) => BinaryOp::BitOr,
+            Some(TokenKind::Pipe) => BinaryOp::BitOr,
             Some(TokenKind::Caret) => BinaryOp::BitXor,
             Some(TokenKind::ShiftLeft) => BinaryOp::Shl,
             Some(TokenKind::ShiftRight) => BinaryOp::Shr,

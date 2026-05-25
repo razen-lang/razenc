@@ -125,7 +125,7 @@ fn kind_color(kind: &TokenKind) -> &'static str {
         | TokenKind::AndAnd
         | TokenKind::OrOr
         | TokenKind::And
-        | TokenKind::Or
+        | TokenKind::Pipe
         | TokenKind::Caret
         | TokenKind::Tilde
         | TokenKind::ShiftLeft
@@ -144,8 +144,7 @@ fn kind_color(kind: &TokenKind) -> &'static str {
         | TokenKind::Comma
         | TokenKind::At
         | TokenKind::Semicolon
-        | TokenKind::Underscore
-        | TokenKind::Pipe => GREY,
+        | TokenKind::Underscore => GREY,
 
         // Grouping => grey
         TokenKind::LeftParen
@@ -154,6 +153,9 @@ fn kind_color(kind: &TokenKind) -> &'static str {
         | TokenKind::RightBrace
         | TokenKind::LeftBracket
         | TokenKind::RightBracket => GREY,
+
+        // Or is no longer emitted by lexer (Pipe is used instead)
+        TokenKind::Or => YELLOW,
     }
 }
 
