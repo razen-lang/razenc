@@ -1,3 +1,4 @@
+use crate::ast::*;
 use crate::lexer::token::{SpannedTokenKind, Token, TokenKind};
 
 const RST: &str = "\x1b[0m";
@@ -181,6 +182,13 @@ pub fn print_phase_header(phase: &str, status: &str) {
     );
 }
 
+pub fn print_phase2_header(status: &str) {
+    println!(
+        "{}Phase {}  {}{}\t\t\t\t{}{}{}",
+        MAGENTA, "2", RST, "AST Build", GREEN, status, RST
+    );
+}
+
 pub fn print_token_count(count: usize) {
     println!();
     println!("{}Tokens{} ({})", CYAN, RST, count);
@@ -210,6 +218,442 @@ pub fn print_footer(status: &str) {
     println!();
     println!("\t\t{}{}{}", GREEN, status, RST);
     println!();
+}
+
+pub fn print_ast(program: &Program) {
+    println!();
+    println!("{}━━━ AST Tree ━━━{}", BLUE, RST);
+    print_decls(&program.decls, 0);
+    println!();
+}
+
+fn print_decls(decls: &[Decl], indent: usize) {
+    for decl in decls {
+        print_decl(decl, indent);
+    }
+}
+
+fn print_decl(decl: &Decl, indent: usize) {
+    let i = "  ".repeat(indent);
+    match decl {
+        Decl::Use(path) => {
+            println!("{}{}Use{} {}{}{}", i, GREEN, RST, CYAN, path.join("."), RST);
+        }
+        Decl::Mod(name, body) => {
+            println!("{}{}Mod{} {}{}", i, GREEN, RST, PEACH, name);
+            if let Some(decls) = body {
+                print_decls(decls, indent + 1);
+            }
+            println!("{}{}{}/{}", i, GREEN, RST, "Mod");
+        }
+        Decl::Fn(f) => {
+            println!("{}{}Fn{} {}{}", i, LGREEN, RST, PEACH, f.name);
+            if !f.generics.is_empty() {
+                println!("{}  {}Generics{} {:?}", i, YELLOW, RST, f.generics);
+            }
+            if f.pub_ {
+                println!("{}  {}pub{}", i, GREEN, RST);
+            }
+            for p in &f.params {
+                println!("{}  {}Param{} {}{} {}{}", i, YELLOW, RST, PEACH, p.name, CYAN, type_str(&p.type_));
+            }
+            if let Some(ref rt) = f.return_ {
+                println!("{}  {}Return{} {}{}", i, YELLOW, RST, CYAN, type_str(rt));
+            }
+            if let Some(ref b) = f.body {
+                print_block(b, indent + 1);
+            }
+            println!("{}{}{}/{}", i, LGREEN, RST, "Fn");
+        }
+        Decl::Struct(s) => {
+            println!("{}{}Struct{} {}{}", i, GREEN, RST, PEACH, s.name);
+            if !s.generics.is_empty() {
+                println!("{}  {}Generics{} {:?}", i, YELLOW, RST, s.generics);
+            }
+            if let Some(ref ib) = s.impl_behave {
+                println!("{}  {}Implements{} {}{}", i, YELLOW, RST, PEACH, ib);
+            }
+            for f in &s.fields {
+                println!("{}  {}Field{} {}{} {}{}", i, YELLOW, RST, PEACH, f.name, CYAN, type_str(&f.type_));
+            }
+            for m in &s.methods {
+                println!("{}  {}Method{} {}{}", i, MAGENTA, RST, PEACH, m.name);
+                for p in &m.params {
+                    println!("{}    {}Param{} {}{} {}{}", i, YELLOW, RST, PEACH, p.name, CYAN, type_str(&p.type_));
+                }
+                if let Some(ref rt) = m.return_ {
+                    println!("{}    {}Return{} {}{}", i, YELLOW, RST, CYAN, type_str(rt));
+                }
+                if let Some(ref b) = m.body {
+                    print_block(b, indent + 2);
+                }
+            }
+            println!("{}{}{}/{}", i, GREEN, RST, "Struct");
+        }
+        Decl::Union(u) => {
+            println!("{}{}Union{} {}{}", i, GREEN, RST, PEACH, u.name);
+            for v in &u.variants {
+                println!("{}  {}Variant{} {}{} {}{}", i, YELLOW, RST, PEACH, v.name, CYAN, type_str(&v.type_));
+            }
+        }
+        Decl::Enum(e) => {
+            println!("{}{}Enum{} {}{}", i, GREEN, RST, PEACH, e.name);
+            for v in &e.variants {
+                if let Some(ref t) = v.type_ {
+                    println!("{}  {}Variant{} {}{} {}{}", i, YELLOW, RST, PEACH, v.name, CYAN, type_str(t));
+                } else {
+                    println!("{}  {}Variant{} {}{}", i, YELLOW, RST, PEACH, v.name);
+                }
+            }
+        }
+        Decl::Error_(name, variants) => {
+            println!("{}{}Error{} {}{}", i, GREEN, RST, PEACH, name);
+            for v in variants {
+                println!("{}  {}Variant{} {}{}", i, YELLOW, RST, PEACH, v.name);
+            }
+        }
+        Decl::Behave(b) => {
+            println!("{}{}Behave{} {}{}", i, GREEN, RST, PEACH, b.name);
+            for m in &b.methods {
+                println!("{}  {}Method{} {}{}", i, MAGENTA, RST, PEACH, m.name);
+                for p in &m.params {
+                    println!("{}    {}Param{} {}{} {}{}", i, YELLOW, RST, PEACH, p.name, CYAN, type_str(&p.type_));
+                }
+                if let Some(ref rt) = m.return_ {
+                    println!("{}    {}Return{} {}{}", i, YELLOW, RST, CYAN, type_str(rt));
+                }
+            }
+        }
+        Decl::Var(v) => {
+            let kind = if v.mutable { "mut" } else { "let" };
+            if let Some(ref t) = v.type_ {
+                println!("{}{}{}{} {}{} {}{} =", i, YELLOW, kind, RST, PEACH, v.name, CYAN, type_str(t));
+            } else {
+                println!("{}{}{}{} {}{} :=", i, YELLOW, kind, RST, PEACH, v.name);
+            }
+            if let Some(ref val) = v.value {
+                print_expr(val, indent + 1);
+            }
+        }
+        Decl::Const(c) => {
+            if let Some(ref t) = c.type_ {
+                println!("{}{}Const{} {}{} {}{} ::", i, GREEN, RST, PEACH, c.name, CYAN, type_str(t));
+            } else {
+                println!("{}{}Const{} {}{} ::", i, GREEN, RST, PEACH, c.name);
+            }
+            if let Some(ref val) = c.value {
+                print_expr(val, indent + 1);
+            }
+        }
+        Decl::TypeAlias(name, t) => {
+            println!("{}{}TypeAlias{} {}{} = {}{}", i, GREEN, RST, PEACH, name, CYAN, type_str(t));
+        }
+        Decl::Test(name, block) => {
+            println!("{}{}Test{} {}{}", i, GREEN, RST, PEACH, name);
+            print_block(block, indent + 1);
+        }
+    }
+}
+
+fn print_block(block: &Block, indent: usize) {
+    let i = "  ".repeat(indent);
+    println!("{} {}Block{} {{", i, MAGENTA, RST);
+    for stmt in &block.stmts {
+        print_stmt(stmt, indent + 1);
+    }
+    println!("{} {} {} }}", i, MAGENTA, RST);
+}
+
+fn print_stmt(stmt: &Stmt, indent: usize) {
+    let i = "  ".repeat(indent);
+    match stmt {
+        Stmt::Expr(e) => {
+            print_expr(e, indent);
+        }
+        Stmt::Var(v) => {
+            let kind = if v.mutable { "mut" } else { "let" };
+            if let Some(ref t) = v.type_ {
+                println!("{}{}{}{} {}{} {}{} =", i, YELLOW, kind, RST, PEACH, v.name, CYAN, type_str(t));
+            } else {
+                println!("{}{}{}{} {}{} :=", i, YELLOW, kind, RST, PEACH, v.name);
+            }
+            if let Some(ref val) = v.value {
+                print_expr(val, indent + 1);
+            }
+        }
+        Stmt::Ret(e) => {
+            match e {
+                Some(ex) => {
+                    println!("{}{}ret{}", i, MAGENTA, RST);
+                    print_expr(ex, indent + 1);
+                }
+                None => println!("{}{}ret{}", i, MAGENTA, RST),
+            }
+        }
+        Stmt::Stop => println!("{}{}stop{}", i, MAGENTA, RST),
+        Stmt::Next => println!("{}{}next{}", i, MAGENTA, RST),
+        Stmt::If(if_) => {
+            println!("{}{}if{}", i, MAGENTA, RST);
+            print_expr(&if_.cond, indent + 1);
+            if !if_.capture.is_empty() {
+                println!("{}  {}capture{} {:?}", i, YELLOW, RST, if_.capture);
+            }
+            print_block(&if_.then_block, indent);
+            if let Some(ref else_) = if_.else_block {
+                println!("{}  {}else{}", i, MAGENTA, RST);
+                match else_.as_ref() {
+                    Stmt::If(inner) => print_stmt(&Stmt::If(inner.clone()), indent + 1),
+                    Stmt::Block(b) => print_block(b, indent),
+                    _ => print_stmt(else_, indent),
+                }
+            }
+        }
+        Stmt::Match(m) => {
+            println!("{}{}match{}", i, MAGENTA, RST);
+            print_expr(&m.target, indent + 1);
+            for arm in &m.arms {
+                println!("{}  {}Arm{} =>", i, YELLOW, RST);
+                print_pattern(&arm.pattern, indent + 2);
+                if !arm.capture.is_empty() {
+                    println!("{}  {}capture{} {:?}", i, YELLOW, RST, arm.capture);
+                }
+                print_expr(&arm.value, indent + 2);
+            }
+        }
+        Stmt::Loop(l) => {
+            println!("{}{}loop{}", i, MAGENTA, RST);
+            if let Some(ref c) = l.cond {
+                print_expr(c, indent + 1);
+            }
+            if !l.captures.is_empty() {
+                println!("{}  {}captures{} {:?}", i, YELLOW, RST, l.captures.iter().map(|c| &c.name).collect::<Vec<_>>());
+            }
+            print_block(&l.body, indent);
+        }
+        Stmt::Defer(e) => {
+            println!("{}{}defer{}", i, MAGENTA, RST);
+            print_expr(e, indent + 1);
+        }
+        Stmt::TryCatch(tc) => {
+            println!("{}{}try{}", i, MAGENTA, RST);
+            print_block(&tc.try_body, indent);
+            println!("{}  {}catch{} {:?}", i, MAGENTA, RST, tc.capture);
+            print_block(&tc.catch_body, indent);
+        }
+        Stmt::Assign(target, op, value) => {
+            println!("{} {}assign{} {}", i, YELLOW, RST, assign_op_str(op));
+            print_expr(target, indent + 1);
+            print_expr(value, indent + 1);
+        }
+        Stmt::Block(b) => {
+            print_block(b, indent);
+        }
+    }
+}
+
+fn print_pattern(pattern: &Pattern, indent: usize) {
+    let i = "  ".repeat(indent);
+    match pattern {
+        Pattern::Wildcard => println!("{}_", i),
+        Pattern::Ident(name) => println!("{}{}", i, name),
+        Pattern::Literal(kind, val) => println!("{}{} '{}'", i, kind_display(kind), val),
+        Pattern::EnumVariant(typ, variant, capture) => {
+            print!("{}.{}", typ, variant);
+            if let Some(c) = capture {
+                print!(" |{}|", c);
+            }
+            println!();
+        }
+    }
+}
+
+fn print_expr(expr: &Expr, indent: usize) {
+    let i = "  ".repeat(indent);
+    match expr {
+        Expr::Literal(kind, val) => {
+            println!("{}{}Literal{} {}{} '{}'", i, ORNG, RST, GREY, kind_display(kind), val);
+        }
+        Expr::Ident(name) => {
+            println!("{}{}Ident{} {}", i, PEACH, RST, name);
+        }
+        Expr::Binary(op, l, r) => {
+            println!("{}{}BinaryOp{} {}", i, YELLOW, RST, binop_str(op));
+            print_expr(l, indent + 1);
+            print_expr(r, indent + 1);
+        }
+        Expr::Unary(op, e) => {
+            println!("{}{}UnaryOp{} {}", i, YELLOW, RST, unaryop_str(op));
+            print_expr(e, indent + 1);
+        }
+        Expr::Call(callee, args) => {
+            println!("{}{}Call{}", i, YELLOW, RST);
+            print_expr(callee, indent + 1);
+            for arg in args {
+                print_expr(arg, indent + 1);
+            }
+        }
+        Expr::Field(obj, name) => {
+            println!("{}{}Field{} .{}", i, YELLOW, RST, name);
+            print_expr(obj, indent + 1);
+        }
+        Expr::Index(obj, idx) => {
+            println!("{}{}Index{}", i, YELLOW, RST);
+            print_expr(obj, indent + 1);
+            print_expr(idx, indent + 1);
+        }
+        Expr::Slice(obj, s, e, incl) => {
+            let op = if *incl { "..=" } else { ".." };
+            println!("{}{}Slice{}{}", i, YELLOW, RST, op);
+            print_expr(obj, indent + 1);
+            print_expr(s, indent + 1);
+            print_expr(e, indent + 1);
+        }
+        Expr::StructInit(name, fields) => {
+            println!("{}{}StructInit{} {}{}", i, CYAN, RST, PEACH, name);
+            for f in fields {
+                println!("{}  {}FieldInit{} {}{}", i, YELLOW, RST, PEACH, f.name);
+                print_expr(&f.value, indent + 2);
+            }
+        }
+        Expr::Deref(e) => {
+            println!("{}{}Deref{} .*", i, YELLOW, RST);
+            print_expr(e, indent + 1);
+        }
+        Expr::Range(s, e, incl) => {
+            let op = if *incl { "..=" } else { ".." };
+            println!("{}{}Range{} {}", i, YELLOW, RST, op);
+            print_expr(s, indent + 1);
+            print_expr(e, indent + 1);
+        }
+        Expr::Block(b) => {
+            print_block(b, indent);
+        }
+        Expr::Paren(e) => {
+            println!("{}{}Paren{}", i, GREY, RST);
+            print_expr(e, indent + 1);
+        }
+        Expr::AtMethod(obj, method) => {
+            println!("{}{}AtMethod{} @{}", i, YELLOW, RST, method);
+            print_expr(obj, indent + 1);
+        }
+        Expr::Catch(expr, capture, body) => {
+            println!("{}{}Catch{} |{}|", i, YELLOW, RST, capture.join(", "));
+            print_expr(expr, indent + 1);
+            print_block(body, indent + 1);
+        }
+    }
+}
+
+fn type_str(t: &Type) -> String {
+    match t {
+        Type::Primitive(k) => kind_display(k).to_string(),
+        Type::Named(n) => n.clone(),
+        Type::Ref(mut_, inner) => {
+            if *mut_ {
+                format!("&mut {}", type_str(inner))
+            } else {
+                format!("&{}", type_str(inner))
+            }
+        }
+        Type::Pointer(inner) => format!("*{}", type_str(inner)),
+        Type::Optional(inner) => format!("?{}", type_str(inner)),
+        Type::ErrorUnion(err, ok) => {
+            if let Some(e) = err {
+                format!("{}!{}", type_str(e), type_str(ok))
+            } else {
+                format!("!{}", type_str(ok))
+            }
+        }
+        Type::Array(inner, size) => {
+            if let Some(s) = size {
+                format!("[{}; {}]", type_str(inner), expr_short_str(s))
+            } else {
+                format!("[{}]", type_str(inner))
+            }
+        }
+        Type::Fn(params, ret) => {
+            let ps: Vec<String> = params.iter().map(type_str).collect();
+            format!("fn({}) -> {}", ps.join(", "), type_str(ret))
+        }
+        Type::Builtin(name) => format!("@{}", name),
+    }
+}
+
+fn expr_short_str(e: &Expr) -> String {
+    match e {
+        Expr::Literal(_, v) => v.clone(),
+        Expr::Ident(name) => name.clone(),
+        _ => "expr".into(),
+    }
+}
+
+fn kind_display(k: &TokenKind) -> &'static str {
+    match k {
+        TokenKind::IntegerValue => "int",
+        TokenKind::FloatValue => "float",
+        TokenKind::StringValue => "string",
+        TokenKind::CharValue => "char",
+        TokenKind::True => "true",
+        TokenKind::False => "false",
+        TokenKind::Nil => "nil",
+        _ => "",
+    }
+}
+
+fn binop_str(op: &BinaryOp) -> &'static str {
+    match op {
+        BinaryOp::Add => "+",
+        BinaryOp::Sub => "-",
+        BinaryOp::Mul => "*",
+        BinaryOp::Div => "/",
+        BinaryOp::Mod => "%",
+        BinaryOp::AddAssign => "+=",
+        BinaryOp::SubAssign => "-=",
+        BinaryOp::MulAssign => "*=",
+        BinaryOp::DivAssign => "/=",
+        BinaryOp::ModAssign => "%=",
+        BinaryOp::Eq => "==",
+        BinaryOp::Ne => "!=",
+        BinaryOp::Lt => "<",
+        BinaryOp::Gt => ">",
+        BinaryOp::Le => "<=",
+        BinaryOp::Ge => ">=",
+        BinaryOp::And => "&&",
+        BinaryOp::Or => "||",
+        BinaryOp::BitAnd => "&",
+        BinaryOp::BitOr => "|",
+        BinaryOp::BitXor => "^",
+        BinaryOp::Shl => "<<",
+        BinaryOp::Shr => ">>",
+        BinaryOp::Assign => "=",
+        BinaryOp::ColonEq => ":=",
+        BinaryOp::Range => "..",
+        BinaryOp::RangeInclusive => "..=",
+    }
+}
+
+fn unaryop_str(op: &UnaryOp) -> &'static str {
+    match op {
+        UnaryOp::Neg => "-",
+        UnaryOp::Not => "!",
+        UnaryOp::BitNot => "~",
+        UnaryOp::Ref => "&",
+        UnaryOp::RefMut => "&mut",
+        UnaryOp::Optional => "?",
+        UnaryOp::Deref => ".*",
+    }
+}
+
+fn assign_op_str(op: &AssignOp) -> &'static str {
+    match op {
+        AssignOp::Eq => "=",
+        AssignOp::AddEq => "+=",
+        AssignOp::SubEq => "-=",
+        AssignOp::MulEq => "*=",
+        AssignOp::DivEq => "/=",
+        AssignOp::ModEq => "%=",
+        AssignOp::ColonEq => ":=",
+    }
 }
 
 pub fn print_error(err: &str) {
