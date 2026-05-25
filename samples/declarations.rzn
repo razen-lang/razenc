@@ -1,0 +1,54 @@
+// declarations.rzn — all declaration forms
+use std.testing.assert
+use math.matrix
+
+mod network
+
+pub mod gfx {
+    pub PIPELINE :: "vulkan"
+}
+
+Drawable :: behave {
+    draw :: fn(self: &@Self) -> void
+    mut on_resize :: fn(self: &@Self, w: i32, h: i32) -> void {
+    }
+}
+
+Vector3 :: struct {
+    x: f32,
+    y: f32,
+    z: f32,
+}
+
+Vector3 :: struct ~> Drawable {
+    x: f32,
+    y: f32,
+    z: f32,
+    pub magnitude :: fn(self: &Vector3) -> f32 {
+        ret 0.0
+    }
+}
+
+Shape :: union {
+    Circle: f32,
+    Rect: Vector3,
+}
+
+Color :: enum {
+    Red,
+    Green,
+    Blue,
+}
+
+Token :: enum {
+    Identifier: str,
+    Number: i64,
+    Eof,
+}
+
+MathError :: error {
+    Division_By_Zero,
+    Overflow_Detected,
+}
+
+IdType :: type(u64)

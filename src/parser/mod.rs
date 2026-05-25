@@ -501,7 +501,17 @@ impl Parser {
             return Ok(Type::Optional(Box::new(inner)));
         }
         if self.consume_if(TokenKind::At) {
-            let name = self.expect_ident()?;
+            let name = if let Some(tk) = self.peek_kind() {
+                if is_type_keyword(&tk) {
+                    let s = format!("{}", tk);
+                    self.advance();
+                    s
+                } else {
+                    self.expect_ident()?
+                }
+            } else {
+                self.expect_ident()?
+            };
             return Ok(Type::Builtin(name));
         }
         if self.consume_if(TokenKind::Fn) {
@@ -621,6 +631,18 @@ impl Parser {
     fn parse_prefix_expr(&mut self) -> Result<Expr, String> {
         let kind = self.peek_kind();
         match kind {
+            Some(TokenKind::If) => {
+                self.advance();
+                return self.parse_if_expr();
+            }
+            Some(TokenKind::Match) => {
+                self.advance();
+                return self.parse_match_expr();
+            }
+            Some(TokenKind::Loop) => {
+                self.advance();
+                return self.parse_loop_expr();
+            }
             Some(TokenKind::Minus) => {
                 self.advance();
                 let expr = self.parse_expr_bp(prefix_bp(&TokenKind::Minus))?;
@@ -664,15 +686,6 @@ impl Parser {
                     None
                 };
                 return Ok(Expr::Ident("ret_in_expr".into()));
-            }
-            Some(TokenKind::If) => {
-                return self.parse_if_expr();
-            }
-            Some(TokenKind::Match) => {
-                return self.parse_match_expr();
-            }
-            Some(TokenKind::Loop) => {
-                return self.parse_loop_expr();
             }
             Some(TokenKind::LeftBrace) => {
                 self.advance();
@@ -720,7 +733,17 @@ impl Parser {
             }
             Some(t) if t.kind == TokenKind::At => {
                 self.advance();
-                let name = self.expect_ident()?;
+                let name = if let Some(tk) = self.peek_kind() {
+                    if is_type_keyword(&tk) {
+                        let s = format!("{}", tk);
+                        self.advance();
+                        s
+                    } else {
+                        self.expect_ident()?
+                    }
+                } else {
+                    self.expect_ident()?
+                };
                 let mut expr = Expr::Ident(format!("@{}", name));
                 expr = self.parse_postfix(expr)?;
                 Ok(expr)

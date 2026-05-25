@@ -1,0 +1,35 @@
+// expressions.rzn — all expression forms
+use std.testing.assert
+
+add :: fn(a: i32, b: i32) -> i32 { ret a + b }
+sub :: fn(a: i32, b: i32) -> i32 { ret a - b }
+mul :: fn(a: i32, b: i32) -> i32 { ret a * b }
+div :: fn(a: i32, b: i32) -> i32 { ret a / b }
+negate :: fn(a: i32) -> i32 { ret -a }
+bitwise_not :: fn(a: u32) -> u32 { ret !a }
+logical_and :: fn(a: bool, b: bool) -> bool { ret a && b }
+logical_or :: fn(a: bool, b: bool) -> bool { ret a || b }
+eq_check :: fn(a: i32, b: i32) -> bool { ret a == b }
+neq_check :: fn(a: i32, b: i32) -> bool { ret a != b }
+lt_check :: fn(a: i32, b: i32) -> bool { ret a < b }
+gt_check :: fn(a: i32, b: i32) -> bool { ret a > b }
+le_check :: fn(a: i32, b: i32) -> bool { ret a <= b }
+ge_check :: fn(a: i32, b: i32) -> bool { ret a >= b }
+bitwise_and :: fn(a: u32, b: u32) -> u32 { ret a & b }
+bitwise_xor :: fn(a: u32, b: u32) -> u32 { ret a ^ b }
+left_shift :: fn(a: u32, b: u32) -> u32 { ret a << b }
+right_shift :: fn(a: u32, b: u32) -> u32 { ret a >> b }
+rem_check :: fn(a: i32, b: i32) -> i32 { ret a % b }
+
+range_exclusive :: fn(start: i32, end: i32) -> i32 { ret start..end }
+range_inclusive :: fn(start: i32, end: i32) -> i32 { ret start..=end }
+
+call_example :: fn() -> i32 { ret add(1, 2) }
+
+ternary_if :: fn(x: i32) -> i32 {
+    if x > 0 {
+        ret x
+    } else {
+        ret -x
+    }
+}

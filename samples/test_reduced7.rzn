@@ -1,0 +1,7 @@
+// test
+ternary_if :: fn(x: i32) -> i32 {
+    if true { 
+        ret 1 
+    }
+    ret 0
+}
