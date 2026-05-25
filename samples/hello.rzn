@@ -1,0 +1,5 @@
+// Razen Hello World
+main :: fn() -> void {
+    // Print to stdout
+    ret
+}

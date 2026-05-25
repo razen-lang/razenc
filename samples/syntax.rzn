@@ -1,0 +1,47 @@
+// Control flow and operators
+is_even :: fn(x: i32) -> bool {
+    if x % 2 == 0 {
+        ret true
+    } else {
+        ret false
+    }
+}
+
+factorial :: fn(n: i32) -> i32 {
+    if n <= 1 {
+        ret 1
+    }
+    ret n * factorial(n - 1)
+}
+
+match_example :: fn(val: i32) -> str {
+    match val {
+        0 => "zero",
+        1 => "one",
+        _ => "many",
+    }
+}
+
+// FatArrow in match
+}
+
+loop_example :: fn() -> void {
+    mut i := 0
+    loop i < 10 {
+        if i == 5 {
+            next
+        }
+        i = i + 1
+    }
+}
+
+// Range and pipe
+range_test :: fn() -> void {
+    loop 0..10 |i| {
+        // process i
+    }
+}
+
+// Optional and error types
+maybe_value : ?i32 = nil
+result : MathError!i32 = 42

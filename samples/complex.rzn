@@ -1,0 +1,48 @@
+// Complex Razen syntax example
+use std.testing.assert
+use math.matrix
+
+Vector3 :: struct ~> Drawable {
+    x: f32,
+    y: f32,
+    z: f32,
+
+    pub magnitude :: fn(self: &Vector3) -> f32 {
+        ret (self.x * self.x + self.y * self.y + self.z * self.z) @sqrt
+    }
+
+    pub draw :: fn(self: &@Self) -> void {
+        // render logic
+    }
+}
+
+// Generic function
+identity<T> :: fn(value: T) -> T {
+    ret value
+}
+
+// Error handling
+divide :: fn(a: i32, b: i32) -> MathError!i32 {
+    if b == 0 {
+        ret MathError.Division_By_Zero
+    }
+    ret a / b
+}
+
+main :: fn() -> i32 {
+    mut result := divide(10, 2) catch |e| {
+        @panic("{}", e)
+    }
+
+    mut vec := Vector3{ x: 1.0, y: 2.0, z: 3.0 }
+    defer vec.cleanup()
+
+    loop 0..=100 |i| {
+        if i @isOdd {
+            next
+        }
+        // process even numbers
+    }
+
+    ret 0
+}

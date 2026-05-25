@@ -1,0 +1,35 @@
+// Type declaration examples
+Point :: struct {
+    x: i32,
+    y: i32,
+}
+
+Color :: enum {
+    Red,
+    Green,
+    Blue,
+}
+
+Shape :: union {
+    Circle: f32,
+    Rect: Point,
+}
+
+MathError :: error {
+    Division_By_Zero,
+    Overflow_Detected,
+}
+
+Drawable :: behave {
+    draw :: fn(self: &@Self) -> void
+}
+
+main :: fn() -> i32 {
+    mut count := 0
+    count = count + 1
+    ret count
+}
+
+CONST_VAL :: 42
+name : str = "razen"
+flag : bool = true
