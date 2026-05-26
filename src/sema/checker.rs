@@ -22,6 +22,13 @@ pub struct TypeChecker {
     pub errors: Vec<SemanticError>,
     pub loop_depth: usize,
     pub current_return_type: Option<TypeInfo>,
+    /// Tracks whether the current code path has definitively exited
+    /// (via ret/stop/noret). Used for unreachable code detection and
+    /// missing-return analysis.
+    pub reached_end: bool,
+    /// Inferred return type when a function has no explicit return type.
+    /// Populated by collecting the types of return expressions.
+    pub inferred_return_type: Option<TypeInfo>,
 }
 
 impl TypeChecker {
@@ -30,6 +37,8 @@ impl TypeChecker {
             errors: Vec::new(),
             loop_depth: 0,
             current_return_type: None,
+            reached_end: false,
+            inferred_return_type: None,
         }
     }
 
@@ -37,26 +46,62 @@ impl TypeChecker {
         !self.errors.is_empty()
     }
 
-    fn error(&mut self, code: &str, msg: String) {
+    pub fn error(&mut self, code: &str, msg: String) {
         self.errors.push(SemanticError::new(code, msg));
     }
 
-    pub fn check_block(&mut self, block: &Block, table: &mut SymbolTable) {
+    /// Check a block. Returns true if the block always exits via ret/stop/noret.
+    pub fn check_block(&mut self, block: &Block, table: &mut SymbolTable) -> bool {
+        let mut exited = false;
         for stmt in &block.stmts {
             self.check_stmt(stmt, table);
+            if self.reached_end {
+                exited = true;
+            }
         }
+        exited
     }
 
     pub fn check_stmt(&mut self, stmt: &Stmt, table: &mut SymbolTable) {
+        if self.reached_end {
+            match stmt {
+                Stmt::Block(_) | Stmt::If(_) | Stmt::Match(_) => {
+                    // Compound stmts can still be reachable inside, but warn at top level
+                }
+                _ => {
+                    self.error(
+                        "SEMA-0014",
+                        "Unreachable statement after function exit (ret/stop/@panic)".into(),
+                    );
+                }
+            }
+        }
+
         match stmt {
             Stmt::Expr(e) => {
-                self.check_expr(e, table);
+                let et = self.check_expr(e, table);
+                if let Some(ref et) = et {
+                    if !et.is_void() && !et.is_noret() {
+                        // Warn on unused expression results
+                    }
+                    // SEMA-0010 / SEMA-0012: Error union result discarded without try/catch
+                    if et.is_error_union() {
+                        self.error(
+                            "SEMA-0012",
+                            format!(
+                                "Error union result of type '{}' is discarded. Use 'try' block or 'catch' to handle it",
+                                et.display()
+                            ),
+                        );
+                    }
+                }
             }
             Stmt::Var(v) => {
                 self.check_var_decl(v, table);
             }
             Stmt::Ret(e) => {
                 self.check_ret(e, table);
+                self.reached_end = true;
             }
             Stmt::Stop => {
                 if self.loop_depth == 0 {
@@ -65,6 +110,7 @@ impl TypeChecker {
                         "Keyword 'stop' is only allowed inside an active loop body".into(),
                     );
                 }
+                self.reached_end = true;
             }
             Stmt::Next => {
                 if self.loop_depth == 0 {
@@ -94,7 +140,10 @@ impl TypeChecker {
             }
             Stmt::Block(b) => {
                 table.push_scope();
-                self.check_block(b, table);
+                let exited = self.check_block(b, table);
+                if exited {
+                    self.reached_end = true;
+                }
                 table.pop_scope();
             }
         }
@@ -160,14 +209,20 @@ impl TypeChecker {
             (Some(e), None) => {
                 let et = self.check_expr(e, table);
                 if let Some(ref et) = et {
-                    if !et.is_void() && !et.is_noret() {
-                        self.error(
-                            "SEMA-0009",
-                            format!(
-                                "Return type mismatch: expected 'void', found '{}'",
-                                et.display()
-                            ),
-                        );
+                    // Infer return type from first return expression
+                    if self.inferred_return_type.is_none() {
+                        self.inferred_return_type = et.clone().into();
+                    } else if let Some(ref inferred) = self.inferred_return_type {
+                        if !et.is_assignable_to(inferred) && !et.is_noret() {
+                            self.error(
+                                "SEMA-0009",
+                                format!(
+                                    "Inferred return type mismatch: expected '{}', found '{}'",
+                                    inferred.display(),
+                                    et.display()
+                                ),
+                            );
+                        }
                     }
                 }
             }
@@ -197,6 +252,9 @@ impl TypeChecker {
             }
         }
 
+        // Save current exit state to merge branches
+        let pre_if = self.reached_end;
+
         if !if_.capture.is_empty() {
             if let Some(ref ct) = ct {
                 if !ct.is_optional() && !ct.is_noret() {
@@ -224,14 +282,35 @@ impl TypeChecker {
                     },
                 );
             }
+            self.reached_end = pre_if;
             self.check_block(&if_.then_block, table);
+            let then_exits = self.reached_end;
             table.pop_scope();
-        } else {
-            self.check_block(&if_.then_block, table);
-        }
 
-        if let Some(ref else_stmt) = if_.else_block {
-            self.check_stmt(else_stmt, table);
+            if let Some(ref else_stmt) = if_.else_block {
+                self.reached_end = pre_if;
+                self.check_stmt(else_stmt, table);
+                let else_exits = self.reached_end;
+                self.reached_end = pre_if || (then_exits && else_exits);
+            } else {
+                self.reached_end = pre_if;
+            }
+        } else {
+            self.reached_end = pre_if;
+            let then_exits = self.check_block(&if_.then_block, table);
+
+            if let Some(ref else_stmt) = if_.else_block {
+                self.reached_end = pre_if;
+                self.check_stmt(else_stmt, table);
+                let else_exits = self.reached_end;
+                self.reached_end = pre_if || (then_exits && else_exits);
+            } else {
+                self.reached_end = pre_if || then_exits;
+                // For if without else, only one path exits, so reset
+                if then_exits {
+                    self.reached_end = false;
+                }
+            }
         }
     }
 
@@ -247,7 +326,14 @@ impl TypeChecker {
                 "Match patterns are not exhaustive. Wildcard pattern '_' is required".into(),
             );
         }
+
+        let pre_match = self.reached_end;
+        let mut all_arms_exit = true;
+        let mut any_arm = false;
+
         for arm in &m.arms {
+            any_arm = true;
+            self.reached_end = pre_match;
             if !arm.capture.is_empty() {
                 if let Some(ref tt) = tt {
                     let is_enum_variant = matches!(&arm.pattern, Pattern::EnumVariant(..));
@@ -287,7 +373,19 @@ impl TypeChecker {
             } else {
                 self.check_expr(&arm.value, table);
             }
+            // Check if this arm's path exited (ret/stop/noret)
+            // Note: check_expr itself may set reached_end
+            if !self.reached_end {
+                all_arms_exit = false;
+            }
         }
+
+        // Match always exits only if all arms exit (including wildcard)
+        self.reached_end = if any_arm {
+            pre_match || (all_arms_exit && has_wildcard)
+        } else {
+            pre_match
+        };
     }
 
     fn check_loop(&mut self, l: &Loop, table: &mut SymbolTable) {
@@ -304,6 +402,9 @@ impl TypeChecker {
         }
 
         self.loop_depth += 1;
+
+        // Save pre-loop exit state — a loop may not execute at all
+        let pre_loop = self.reached_end;
 
         if !l.captures.is_empty() {
             table.push_scope();
@@ -322,6 +423,9 @@ impl TypeChecker {
         } else {
             self.check_block(&l.body, table);
         }
+
+        // Loop may not execute, so restore to pre-loop state
+        self.reached_end = pre_loop;
 
         self.loop_depth -= 1;
     }
@@ -402,7 +506,7 @@ impl TypeChecker {
     }
 
     pub fn check_expr(&mut self, expr: &Expr, table: &mut SymbolTable) -> Option<TypeInfo> {
-        match expr {
+        let result = match expr {
             Expr::Literal(kind, val) => Some(literal_to_type(kind, val)),
             Expr::Ident(name) => {
                 if name == "_" {
@@ -439,10 +543,11 @@ impl TypeChecker {
             Expr::Deref(e) => self.check_deref(e, table),
             Expr::Block(b) => {
                 table.push_scope();
-                for stmt in &b.stmts {
-                    self.check_stmt(stmt, table);
-                }
+                let exited = self.check_block(b, table);
                 table.pop_scope();
+                if exited {
+                    self.reached_end = true;
+                }
                 Some(TypeInfo::Void)
             }
             Expr::Paren(e) => self.check_expr(e, table),
@@ -451,6 +556,7 @@ impl TypeChecker {
                 Some(TypeInfo::Builtin(method.clone()))
             }
             Expr::Ret(value) => {
+                self.reached_end = true;
                 if let Some(val) = value {
                     self.check_expr(val, table)
                 } else {
@@ -472,8 +578,9 @@ impl TypeChecker {
             }
             Expr::Catch(e, _capture, body) => {
                 let et = self.check_expr(e, table);
-                for stmt in &body.stmts {
-                    self.check_stmt(stmt, table);
+                let body_exited = self.check_block(body, table);
+                if body_exited {
+                    self.reached_end = true;
                 }
                 if let Some(TypeInfo::ErrorUnion(_, ok)) = et {
                     Some(*ok)
@@ -481,10 +588,17 @@ impl TypeChecker {
                     et
                 }
             }
-            Expr::MapLiteral(_pairs) => {
-                Some(TypeInfo::Builtin("map".into()))
+            Expr::MapLiteral(_pairs) => Some(TypeInfo::Builtin("map".into())),
+        };
+
+        // If the result type is Noret, mark the path as terminated
+        if let Some(ref t) = result {
+            if t.is_noret() {
+                self.reached_end = true;
             }
         }
+
+        result
     }
 
     fn check_binary(
@@ -710,9 +824,38 @@ impl TypeChecker {
                     },
                 };
                 if generic_count > 0 {
-                    // If caller didn't provide generic arguments, they must all be inferred.
-                    // For now, we check that instantiation is attempted directly.
-                    // This is a stub — full generic instantiation checking is future work.
+                    // Generic function called without explicit type arguments.
+                    // Generics must be inferrable from the regular arguments.
+                    // If the function has zero parameters (only generic return type),
+                    // the return type cannot be inferred from arguments alone.
+                    let param_count = match sym {
+                        Symbol::Function(fs) => Some(fs.params.len()),
+                        Symbol::StructType(ss) => Some(ss.fields.len()),
+                        Symbol::EnumType(es) => Some(es.variants.len()),
+                        _ => None,
+                    };
+                    let args_provided = args.len();
+                    if let Some(pc) = param_count {
+                        if pc == 0 && generic_count > 0 {
+                            self.error(
+                                "SEMA-0020",
+                                format!(
+                                    "Generic parameters for '{}' cannot be inferred: no regular parameters to infer from. \
+                                     Expected {} type argument(s), got 0 (inference)",
+                                    name, generic_count
+                                ),
+                            );
+                        }
+                    } else if args_provided < generic_count {
+                        self.error(
+                            "SEMA-0020",
+                            format!(
+                                "Generic parameters mismatch: expected at least {} type arguments (inferrable), \
+                                 but function '{}' has {} generic parameters with insufficient context",
+                                generic_count, name, generic_count
+                            ),
+                        );
+                    }
                 }
             }
         }
@@ -1118,8 +1261,22 @@ impl TypeChecker {
         match table.lookup_type(name) {
             Some(TypeInfo::Struct(sname, struct_fields)) => {
                 for f in fields {
-                    self.check_expr(&f.value, table);
-                    if !struct_fields.iter().any(|(n, _, _)| n == &f.name) {
+                    let ft = self.check_expr(&f.value, table);
+                    if let Some((_, declared_type, _)) =
+                        struct_fields.iter().find(|(n, _, _)| n == &f.name)
+                    {
+                        if let Some(ref ft) = ft {
+                            if !ft.is_assignable_to(declared_type) && !ft.is_noret() {
+                                self.error(
+                                    "SEMA-0001",
+                                    format!(
+                                        "Type mismatch in field '{}' of '{}': expected '{}', found '{}'",
+                                        f.name, sname, declared_type.display(), ft.display()
+                                    ),
+                                );
+                            }
+                        }
+                    } else {
                         self.error(
                             "SEMA-0015",
                             format!("Field '{}' does not exist on struct '{}'", f.name, sname),

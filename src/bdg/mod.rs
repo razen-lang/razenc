@@ -852,10 +852,7 @@ pub fn print_error(err: &str) {
 pub fn print_parse_error(source: &str, file_stem: &str, err: &crate::parser::ParseError) {
     let line = err.line;
     let col = err.col;
-    eprintln!(
-        "{}Error:{} {}",
-        RED, RST, err.message
-    );
+    eprintln!("{}Error:{} {}", RED, RST, err.message);
     if line > 0 {
         eprintln!(" {}-->{} {}:{}:{}", GREY, RST, file_stem, line, col);
         if let Some(source_line) = source.lines().nth(line - 1) {

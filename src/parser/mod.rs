@@ -25,11 +25,19 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, pos: 0, source: String::new() }
+        Parser {
+            tokens,
+            pos: 0,
+            source: String::new(),
+        }
     }
 
     pub fn new_with_source(tokens: Vec<Token>, source: &str) -> Self {
-        Parser { tokens, pos: 0, source: source.to_string() }
+        Parser {
+            tokens,
+            pos: 0,
+            source: source.to_string(),
+        }
     }
 
     fn mk_err(&self, msg: String) -> ParseError {
@@ -38,7 +46,11 @@ impl Parser {
             .get(self.pos)
             .map(|t| (t.line, t.col))
             .unwrap_or((0, 0));
-        ParseError { message: msg, line, col }
+        ParseError {
+            message: msg,
+            line,
+            col,
+        }
     }
 
     pub fn parse(&mut self) -> Result<Program, Vec<ParseError>> {
@@ -1773,12 +1785,7 @@ fn infix_bp(kind: &TokenKind) -> Option<(u8, u8)> {
 }
 
 impl Parser {
-    fn build_binary(
-        &mut self,
-        lhs: Expr,
-        rhs: Expr,
-        kind: Option<TokenKind>,
-    ) -> PResult<Expr> {
+    fn build_binary(&mut self, lhs: Expr, rhs: Expr, kind: Option<TokenKind>) -> PResult<Expr> {
         let op = match kind {
             Some(TokenKind::Plus) => BinaryOp::Add,
             Some(TokenKind::Minus) => BinaryOp::Sub,
@@ -1807,11 +1814,13 @@ impl Parser {
             Some(TokenKind::ColonEquals) => BinaryOp::ColonEq,
             Some(TokenKind::DotDot) => BinaryOp::Range,
             Some(TokenKind::DotDotEquals) => BinaryOp::RangeInclusive,
-            _ => return Err(ParseError {
-                message: "Unknown binary operator".into(),
-                line: self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0),
-                col: self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0),
-            }),
+            _ => {
+                return Err(ParseError {
+                    message: "Unknown binary operator".into(),
+                    line: self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0),
+                    col: self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0),
+                });
+            }
         };
         Ok(Expr::Binary(op, Box::new(lhs), Box::new(rhs)))
     }

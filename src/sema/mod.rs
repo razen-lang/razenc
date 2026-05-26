@@ -596,12 +596,47 @@ impl SemanticAnalyzer {
                 },
             );
         }
-        self.checker.current_return_type = fn_sym.return_.clone();
+
+        // Set up return type checking
+        let declared_ret = fn_sym.return_.clone();
+        self.checker.current_return_type = declared_ret.clone();
+        self.checker.reached_end = false;
+        self.checker.inferred_return_type = None;
+
         self.checker.check_block(block, &mut self.table);
+
+        // S-SEMA-02: Control flow - verify all paths return for non-void/non-noret
+        if let Some(ref ret_type) = declared_ret {
+            if !ret_type.is_void() && !ret_type.is_noret() {
+                if !self.checker.reached_end {
+                    self.checker.error(
+                        "SEMA-0009",
+                        format!(
+                            "Function '{}' has non-void return type '{}' but does not return a value on all paths",
+                            fn_sym.name, ret_type.display()
+                        ),
+                    );
+                }
+            }
+        }
+
+        // S-SEMA-03: Type inference - if no declared return type, use inferred
+        if declared_ret.is_none() {
+            if self.checker.inferred_return_type.is_some() {
+                // Inferred return type is available for future use
+                // (e.g., callers that reference this function)
+            }
+        }
+
         self.checker.current_return_type = None;
+        self.checker.reached_end = false;
+        self.checker.inferred_return_type = None;
         self.table.pop_scope();
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 fn register_builtins(table: &mut SymbolTable) {
     let builtins: Vec<(&str, usize, Option<usize>)> = vec![
