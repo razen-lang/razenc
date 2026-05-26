@@ -46,7 +46,7 @@ Supporting modules:
 P0 ─────────────────────────────────────────────────────────► P5
    ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐
    │Parser│  │ Sema │  │ CLI  │  │LLVM  │  │ Std  │  │Tools │
-   │ 90%  │  │ 70%  │  │ 80%  │  │  0%  │  │  0%  │  │ 10%  │
+    │ 100% │  │ 70%  │  │ 80%  │  │  0%  │  │  0%  │  │ 10%  │
    └──────┘  └──────┘  └──────┘  └──────┘  └──────┘  └──────┘
    P1         P2        P3         P4         P5         P6
 ```
@@ -84,7 +84,7 @@ P0 ─────────────────────────�
 
 ## 4. Phase 2: Parser — Priority 1
 
-**Status: 🟡 ~90% — Production-ready for most constructs. Some gaps remain.**
+**Status: 🟢 100% — All Priority 1 items complete. No remaining gaps.**
 
 ### 4.1 AST Definitions (`src/ast/mod.rs`) — 100%
 - **Lines:** 240
@@ -211,7 +211,7 @@ P0 ─────────────────────────�
 - **Estimate:** 2-3 days
 - **Files affected:** `src/parser/mod.rs`
 - **Dependencies:** None
-- **Status:** ❌ Not started
+- **Status:** ✅ Complete — `parse_block_contents` wraps `parse_stmt` in try/error with `recover_stmt()` to skip to next boundary on failure. Tests: `test_error_recovery_in_block`, `test_error_recovery_multiple_errors`.
 
 #### P-PARSER-02: Improve pipe-capture vs binary-OR disambiguation
 - **Description:** The current heuristic (`is_capture_start`) looks ahead to check if `|...|` is followed by `{` or `=>`. This can fail with nested expressions like `x | (y \| z)` or captures with complex patterns.
@@ -219,7 +219,7 @@ P0 ─────────────────────────�
 - **Estimate:** 1-2 days
 - **Files affected:** `src/parser/mod.rs:685-733`
 - **Dependencies:** None
-- **Status:** ❌ Known limitation
+- **Status:** ✅ Complete — `is_capture_start` now checks for `&`, `mut`, identifiers, commas between pipes, and requires `{`, `=>`, `,`, `|`, or `}` after closing pipe. Tests: `test_pipe_with_nested_parens`, `test_pipe_or_with_block`, `test_pipe_as_binary_not_capture`, `test_bitwise_or_without_capture`.
 
 #### P-PARSER-03: Better error messages with span information
 - **Description:** Error messages currently include line numbers but not column ranges or source snippets. Add span-based diagnostics with `--> filename:line:col` format.
@@ -227,7 +227,7 @@ P0 ─────────────────────────�
 - **Estimate:** 2-3 days
 - **Files affected:** `src/parser/mod.rs`, `src/bdg/mod.rs`
 - **Dependencies:** None
-- **Status:** ❌ Not started
+- **Status:** ✅ Complete — `ParseError` struct with `message`, `line`, `col`. Parser stores source text, `bdg::print_parse_error` renders `--> file:line:col` with source line and blue caret indicator. All internal error methods (`expect`, `expect_ident`, etc.) produce structured errors.
 
 #### P-PARSER-04: Attribute/annotation parsing
 - **Description:** The syntax spec mentions `@` as builtin prefix and structural attributes. Parse annotation syntax like `@inline`, `@export("name")` on declarations.
@@ -235,7 +235,7 @@ P0 ─────────────────────────�
 - **Estimate:** 2-3 days
 - **Files affected:** `src/ast/mod.rs`, `src/parser/mod.rs`
 - **Dependencies:** None
-- **Status:** ❌ Not started
+- **Status:** ✅ Complete — `Annotation` struct in AST, `parse_attrs()` in parser handles `@name` and `@name(args)` before declarations. Tests: `test_annotation_on_fn`, `test_annotation_with_args`, `test_multiple_annotations`, `test_annotation_on_struct`, `test_annotation_on_var`, `test_annotation_on_const`.
 
 #### P-PARSER-05: Allow trailing commas consistently
 - **Description:** Some parsers accept trailing commas in struct/init/enum fields, others do not. Make this consistent everywhere (recommend: allow always).
@@ -243,7 +243,7 @@ P0 ─────────────────────────�
 - **Estimate:** 1 day
 - **Files affected:** `src/parser/mod.rs`
 - **Dependencies:** None
-- **Status:** ⚠️ Partial — some places accept trailing comma, others don't
+- **Status:** ✅ Complete — trailing commas consistently accepted via `consume_if(TokenKind::Comma)` after field/param lists. Tests: `test_trailing_comma_in_fn_params`, `test_trailing_comma_in_struct`, `test_trailing_comma_in_enum`, `test_trailing_comma_in_enum_values`, `test_trailing_comma_in_struct_init`, `test_trailing_comma_in_call`, `test_trailing_comma_in_generics`.
 
 ---
 
@@ -836,9 +836,9 @@ The standard library (`std/`) is written in Razen itself and ships with the comp
 
 ### Milestone 1: "Solid Foundation" (Current — Q2 2026)
 - ~~Lexer complete~~ ✅
-- ~~Parser complete (90%)~~ ✅
+- ~~Parser complete (100%)~~ ✅
 - ~~Basic semantic analysis (70%)~~ ✅
-- **Target:** Parser reaches 100%, all parser gaps closed
+- ~~All priority-1 parser gaps closed~~ ✅
 - **Deliverable:** CLI that lexes, parses, and type-checks any valid `.rzn` file
 
 ### Milestone 2: "Type Safe" (Q3 2026)

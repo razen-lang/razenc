@@ -481,6 +481,9 @@ impl TypeChecker {
                     et
                 }
             }
+            Expr::MapLiteral(_pairs) => {
+                Some(TypeInfo::Builtin("map".into()))
+            }
         }
     }
 

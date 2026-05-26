@@ -1,26 +1,38 @@
 use crate::ast::*;
 use crate::lexer::Lexer;
 use crate::lexer::token::TokenKind;
-use crate::parser::Parser;
+use crate::parser::{ParseError, Parser};
 
-fn parse(source: &str) -> Result<Program, Vec<String>> {
+fn parse(source: &str) -> Result<Program, Vec<ParseError>> {
     let lexer = Lexer::new(source);
     let result = lexer.tokenize();
     if !result.errors.is_empty() {
-        return Err(result.errors.iter().map(|e| e.message.clone()).collect());
+        return Err(result
+            .errors
+            .iter()
+            .map(|e| ParseError {
+                message: e.message.clone(),
+                line: e.line,
+                col: e.col,
+            })
+            .collect());
     }
-    let mut parser = Parser::new(result.tokens);
+    let mut parser = Parser::new_with_source(result.tokens, source);
     parser.parse()
 }
 
 fn parse_ok(source: &str) -> Program {
     match parse(source) {
         Ok(p) => p,
-        Err(e) => panic!("Parse failed: {:?}\nSource: {}", e, source),
+        Err(e) => panic!(
+            "Parse failed: {:?}\nSource: {}",
+            e.iter().map(|e| &e.message).collect::<Vec<_>>(),
+            source
+        ),
     }
 }
 
-fn parse_err(source: &str) -> Vec<String> {
+fn parse_err(source: &str) -> Vec<ParseError> {
     match parse(source) {
         Ok(p) => panic!("Expected parse error but got: {:?}\nSource: {}", p, source),
         Err(e) => e,

@@ -723,6 +723,13 @@ fn print_expr(expr: &Expr, indent: usize) {
                 print_block(body, indent + 1);
             }
         }
+        Expr::MapLiteral(pairs) => {
+            println!("{}{}MapLiteral{}", i, YELLOW, RST);
+            for (k, v) in pairs {
+                print_expr(k, indent + 1);
+                print_expr(v, indent + 1);
+            }
+        }
     }
 }
 
@@ -840,6 +847,28 @@ fn assign_op_str(op: &AssignOp) -> &'static str {
 
 pub fn print_error(err: &str) {
     eprintln!("{}Error:{} {}", RED, RST, err);
+}
+
+pub fn print_parse_error(source: &str, file_stem: &str, err: &crate::parser::ParseError) {
+    let line = err.line;
+    let col = err.col;
+    eprintln!(
+        "{}Error:{} {}",
+        RED, RST, err.message
+    );
+    if line > 0 {
+        eprintln!(" {}-->{} {}:{}:{}", GREY, RST, file_stem, line, col);
+        if let Some(source_line) = source.lines().nth(line - 1) {
+            eprintln!(" {}|{}", GREY, RST);
+            eprintln!(" {:>4}{} {}", GREY, RST, source_line);
+            let mut caret = String::with_capacity(col.saturating_sub(1) + 5);
+            caret.push_str(&" ".repeat(4)); // line number padding
+            caret.push(' ');
+            caret.push_str(&" ".repeat(col.saturating_sub(1)));
+            caret.push_str(&format!("{}^{}", BLUE, RST));
+            eprintln!("{}", caret);
+        }
+    }
 }
 
 fn print_annotation(a: &Annotation, indent: usize) {

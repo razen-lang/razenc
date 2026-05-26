@@ -66,7 +66,7 @@ fn process_file(file_path: &PathBuf, verbose: bool) {
         crate::bdg::print_footer("Lexer\t\tDone");
     }
 
-    let mut parser = crate::parser::Parser::new(token_result.tokens);
+    let mut parser = crate::parser::Parser::new_with_source(token_result.tokens, &source);
     let program = match parser.parse() {
         Ok(program) => {
             if verbose {
@@ -78,7 +78,7 @@ fn process_file(file_path: &PathBuf, verbose: bool) {
         }
         Err(errors) => {
             for err in &errors {
-                crate::bdg::print_error(err);
+                crate::bdg::print_parse_error(&source, file_stem, err);
             }
             None
         }

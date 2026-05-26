@@ -1,17 +1,47 @@
 use crate::ast::*;
 use crate::lexer::token::{Token, TokenKind};
+use std::fmt;
+
+type PResult<T> = Result<T, ParseError>;
+
+#[derive(Debug, Clone)]
+pub struct ParseError {
+    pub message: String,
+    pub line: usize,
+    pub col: usize,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Error at {}:{}: {}", self.line, self.col, self.message)
+    }
+}
 
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    source: String,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Parser { tokens, pos: 0 }
+        Parser { tokens, pos: 0, source: String::new() }
     }
 
-    pub fn parse(&mut self) -> Result<Program, Vec<String>> {
+    pub fn new_with_source(tokens: Vec<Token>, source: &str) -> Self {
+        Parser { tokens, pos: 0, source: source.to_string() }
+    }
+
+    fn mk_err(&self, msg: String) -> ParseError {
+        let (line, col) = self
+            .tokens
+            .get(self.pos)
+            .map(|t| (t.line, t.col))
+            .unwrap_or((0, 0));
+        ParseError { message: msg, line, col }
+    }
+
+    pub fn parse(&mut self) -> Result<Program, Vec<ParseError>> {
         let mut decls = Vec::new();
         let mut errors = Vec::new();
 
@@ -59,18 +89,23 @@ impl Parser {
         t
     }
 
-    fn expect(&mut self, kind: TokenKind) -> Result<&Token, String> {
+    fn expect(&mut self, kind: TokenKind) -> Result<&Token, ParseError> {
         let tok = self.tokens.get(self.pos);
         match tok {
             Some(t) if t.kind == kind => {
                 self.pos += 1;
                 Ok(t)
             }
-            Some(t) => Err(format!(
-                "Expected '{}', found '{}' at {}:{}",
-                kind, t.kind, t.line, t.col
-            )),
-            None => Err(format!("Expected '{}', reached end of file", kind)),
+            Some(t) => Err(ParseError {
+                message: format!("Expected '{}', found '{}'", kind, t.kind),
+                line: t.line,
+                col: t.col,
+            }),
+            None => Err(ParseError {
+                message: format!("Expected '{}', reached end of file", kind),
+                line: self.tokens.last().map(|t| t.line).unwrap_or(0),
+                col: self.tokens.last().map(|t| t.col).unwrap_or(0),
+            }),
         }
     }
 
@@ -93,7 +128,7 @@ impl Parser {
         }
     }
 
-    fn expect_ident(&mut self) -> Result<String, String> {
+    fn expect_ident(&mut self) -> Result<String, ParseError> {
         let tok = self.tokens.get(self.pos);
         match tok {
             Some(t) if t.kind == TokenKind::Identifier => {
@@ -101,11 +136,16 @@ impl Parser {
                 self.pos += 1;
                 Ok(name)
             }
-            Some(t) => Err(format!(
-                "Expected identifier at {}:{}, found '{}'",
-                t.line, t.col, t.kind
-            )),
-            None => Err("Expected identifier, reached end of file".into()),
+            Some(t) => Err(ParseError {
+                message: format!("Expected identifier, found '{}'", t.kind),
+                line: t.line,
+                col: t.col,
+            }),
+            None => Err(ParseError {
+                message: "Expected identifier, reached end of file".into(),
+                line: self.tokens.last().map(|t| t.line).unwrap_or(0),
+                col: self.tokens.last().map(|t| t.col).unwrap_or(0),
+            }),
         }
     }
 
@@ -122,7 +162,7 @@ impl Parser {
         self.consume_if(TokenKind::Semicolon);
     }
 
-    fn parse_decl(&mut self) -> Result<Decl, String> {
+    fn parse_decl(&mut self) -> Result<Decl, ParseError> {
         let attrs = self.parse_attrs();
         let pub_ = self.consume_if(TokenKind::Pub);
         let ext = self.consume_if(TokenKind::Ext);
@@ -135,14 +175,7 @@ impl Parser {
             return self.parse_mod(pub_);
         }
 
-        let name = self.expect_ident().map_err(|e| {
-            format!("{} at line {}", e, {
-                self.tokens
-                    .get(self.pos)
-                    .map(|t| format!("{}:{}", t.line, t.col))
-                    .unwrap_or_else(|| "0:0".into())
-            })
-        })?;
+        let name = self.expect_ident()?;
         let generics = if self.consume_if(TokenKind::Less) {
             let g = self.parse_generic_params()?;
             self.expect(TokenKind::Greater)?;
@@ -254,7 +287,7 @@ impl Parser {
         }
     }
 
-    fn parse_use(&mut self) -> Result<Decl, String> {
+    fn parse_use(&mut self) -> PResult<Decl> {
         let mut path = Vec::new();
         loop {
             let name = self.expect_ident()?;
@@ -268,7 +301,7 @@ impl Parser {
         Ok(Decl::Use(path))
     }
 
-    fn parse_mod(&mut self, _pub_: bool) -> Result<Decl, String> {
+    fn parse_mod(&mut self, _pub_: bool) -> PResult<Decl> {
         let name = self.expect_ident()?;
         if self.consume_if(TokenKind::LeftBrace) {
             let mut decls = Vec::new();
@@ -285,7 +318,7 @@ impl Parser {
         }
     }
 
-    fn parse_generic_params(&mut self) -> Result<Vec<String>, String> {
+    fn parse_generic_params(&mut self) -> PResult<Vec<String>> {
         let mut params = Vec::new();
         loop {
             if self.check(TokenKind::Greater) {
@@ -307,7 +340,7 @@ impl Parser {
         pub_: bool,
         ext: bool,
         attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         if self.check(TokenKind::Fn) {
             return self.parse_fn_decl(name, generics, pub_, ext, attrs);
         }
@@ -349,7 +382,7 @@ impl Parser {
         mut_: bool,
         pub_: bool,
         attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         let value = self.parse_expr()?;
         self.expect_newline_or_semi();
         Ok(Decl::Var(VarDecl {
@@ -368,7 +401,7 @@ impl Parser {
         mut_: bool,
         pub_: bool,
         attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         let type_ = self.parse_type()?;
         if self.consume_if(TokenKind::ColonEquals) || self.consume_if(TokenKind::Assign) {
             let value = self.parse_expr()?;
@@ -391,11 +424,7 @@ impl Parser {
                 value: Some(value),
             }))
         } else {
-            Err(format!(
-                "Expected ':=', ':', or '=' after type at line {}:{}",
-                { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
-                { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
-            ))
+            Err(self.mk_err("Expected ':=', ':', or '=' after type".into()))
         }
     }
 
@@ -406,7 +435,7 @@ impl Parser {
         pub_: bool,
         ext: bool,
         attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         self.advance();
         self.expect(TokenKind::LeftParen)?;
         let params = self.parse_fn_params()?;
@@ -439,7 +468,7 @@ impl Parser {
         }))
     }
 
-    fn parse_fn_params(&mut self) -> Result<Vec<Param>, String> {
+    fn parse_fn_params(&mut self) -> PResult<Vec<Param>> {
         let mut params = Vec::new();
         loop {
             if self.check(TokenKind::RightParen) {
@@ -467,7 +496,7 @@ impl Parser {
         generics: Vec<String>,
         pub_: bool,
         attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         self.advance();
         let impl_behave = if self.consume_if(TokenKind::TildeArrow) {
             Some(self.expect_ident()?)
@@ -500,11 +529,7 @@ impl Parser {
                     });
                     self.consume_if(TokenKind::Comma);
                 } else {
-                    return Err(format!(
-                        "Expected ':' or '::' after field name at {}:{}",
-                        { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
-                        { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
-                    ));
+                    return Err(self.mk_err("Expected ':' or '::' after field name".into()));
                 }
             } else {
                 break;
@@ -530,7 +555,7 @@ impl Parser {
         generics: Vec<String>,
         pub_: bool,
         attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         self.advance();
         let mut variants = Vec::new();
         self.expect(TokenKind::LeftBrace)?;
@@ -546,11 +571,7 @@ impl Parser {
                         type_,
                     });
                 } else {
-                    return Err(format!(
-                        "Expected ':' after variant name at {}:{}",
-                        { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
-                        { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
-                    ));
+                    return Err(self.mk_err("Expected ':' after variant name".into()));
                 }
                 self.consume_if(TokenKind::Comma);
             } else {
@@ -574,7 +595,7 @@ impl Parser {
         generics: Vec<String>,
         pub_: bool,
         attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         self.advance();
         let impl_behave = if self.consume_if(TokenKind::TildeArrow) {
             Some(self.expect_ident()?)
@@ -635,7 +656,7 @@ impl Parser {
         name: String,
         _generics: Vec<String>,
         _attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         self.advance();
         let mut variants = Vec::new();
         self.expect(TokenKind::LeftBrace)?;
@@ -659,7 +680,7 @@ impl Parser {
         generics: Vec<String>,
         pub_: bool,
         attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         self.advance();
         let mut methods = Vec::new();
         self.expect(TokenKind::LeftBrace)?;
@@ -697,7 +718,7 @@ impl Parser {
         _generics: Vec<String>,
         _pub_: bool,
         _attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         self.advance();
         self.expect(TokenKind::LeftParen)?;
         let type_ = self.parse_type()?;
@@ -711,14 +732,14 @@ impl Parser {
         name: String,
         _pub_: bool,
         _attrs: Vec<Annotation>,
-    ) -> Result<Decl, String> {
+    ) -> PResult<Decl> {
         self.advance();
         self.expect(TokenKind::LeftBrace)?;
         let body = self.parse_block_contents()?;
         Ok(Decl::Test(name, body))
     }
 
-    fn parse_fn_body_only(&mut self, name: String, pub_: bool) -> Result<FnDecl, String> {
+    fn parse_fn_body_only(&mut self, name: String, pub_: bool) -> PResult<FnDecl> {
         self.expect(TokenKind::LeftParen)?;
         let params = self.parse_fn_params()?;
         self.expect(TokenKind::RightParen)?;
@@ -747,7 +768,7 @@ impl Parser {
         })
     }
 
-    pub fn parse_type(&mut self) -> Result<Type, String> {
+    pub fn parse_type(&mut self) -> PResult<Type> {
         if self.consume_if(TokenKind::And) {
             let mutable = self.consume_if(TokenKind::Mut);
             let inner = self.parse_type()?;
@@ -837,14 +858,10 @@ impl Parser {
             return Ok(Type::ErrorUnion(None, Box::new(ok)));
         }
 
-        Err(format!(
-            "Expected type at {}:{}",
-            { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
-            { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
-        ))
+        Err(self.mk_err("Expected type".into()))
     }
 
-    fn parse_fn_type(&mut self) -> Result<Type, String> {
+    fn parse_fn_type(&mut self) -> PResult<Type> {
         self.expect(TokenKind::LeftParen)?;
         let mut params = Vec::new();
         loop {
@@ -861,12 +878,12 @@ impl Parser {
         let return_ = if self.consume_if(TokenKind::Arrow) {
             self.parse_type()?
         } else {
-            return Err("Expected '->' and return type for fn type".into());
+            return Err(self.mk_err("Expected '->' and return type for fn type".into()));
         };
         Ok(Type::Fn(params, Box::new(return_)))
     }
 
-    fn parse_array_type(&mut self) -> Result<Type, String> {
+    fn parse_array_type(&mut self) -> PResult<Type> {
         let inner = self.parse_type()?;
         let size = if self.consume_if(TokenKind::Semicolon) {
             let expr = self.parse_expr()?;
@@ -878,7 +895,7 @@ impl Parser {
         Ok(Type::Array(Box::new(inner), size))
     }
 
-    pub fn parse_expr(&mut self) -> Result<Expr, String> {
+    pub fn parse_expr(&mut self) -> PResult<Expr> {
         let mut lhs = self.parse_expr_bp(0)?;
         if let Expr::Ident(_) = &lhs {
             if self.consume_if(TokenKind::LeftBrace) {
@@ -892,11 +909,11 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_match_target(&mut self) -> Result<Expr, String> {
+    fn parse_match_target(&mut self) -> PResult<Expr> {
         self.parse_expr_bp(0)
     }
 
-    fn parse_expr_bp(&mut self, min_bp: u8) -> Result<Expr, String> {
+    fn parse_expr_bp(&mut self, min_bp: u8) -> PResult<Expr> {
         let mut lhs = self.parse_prefix_expr()?;
 
         loop {
@@ -1014,7 +1031,7 @@ impl Parser {
         )
     }
 
-    fn parse_prefix_expr(&mut self) -> Result<Expr, String> {
+    fn parse_prefix_expr(&mut self) -> PResult<Expr> {
         let kind = self.peek_kind();
         match kind {
             Some(TokenKind::If) => {
@@ -1115,7 +1132,7 @@ impl Parser {
         self.parse_primary_expr()
     }
 
-    fn parse_primary_expr(&mut self) -> Result<Expr, String> {
+    fn parse_primary_expr(&mut self) -> PResult<Expr> {
         let tok = self.tokens.get(self.pos).cloned();
         match tok {
             Some(t) if is_literal(&t.kind) => {
@@ -1163,20 +1180,20 @@ impl Parser {
                 expr = self.parse_postfix(expr)?;
                 Ok(expr)
             }
-            Some(_) => Err(format!(
-                "Unexpected token '{}' at {}:{}",
-                self.tokens
-                    .get(self.pos)
-                    .map(|t| t.kind.to_string())
-                    .unwrap_or_default(),
-                self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0),
-                self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0)
-            )),
-            None => Err("Unexpected end of input".into()),
+            Some(t) => Err(ParseError {
+                message: format!("Unexpected token '{}'", t.kind),
+                line: t.line,
+                col: t.col,
+            }),
+            None => Err(ParseError {
+                message: "Unexpected end of input".into(),
+                line: self.tokens.last().map(|t| t.line).unwrap_or(0),
+                col: self.tokens.last().map(|t| t.col).unwrap_or(0),
+            }),
         }
     }
 
-    fn parse_postfix(&mut self, mut lhs: Expr) -> Result<Expr, String> {
+    fn parse_postfix(&mut self, mut lhs: Expr) -> PResult<Expr> {
         loop {
             if self.consume_if(TokenKind::LeftParen) {
                 let mut args = Vec::new();
@@ -1198,7 +1215,7 @@ impl Parser {
                 lhs = Expr::Field(Box::new(lhs), field);
             } else if self.consume_if(TokenKind::LeftBracket) {
                 if self.consume_if(TokenKind::RightBracket) {
-                    return Err("Empty index".into());
+                    return Err(self.mk_err("Empty index".into()));
                 }
                 // Use expr_bp with min_bp=20 to prevent `..` (range, LBP=19)
                 // from being consumed as a binary operator inside brackets
@@ -1241,7 +1258,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_struct_init_fields(&mut self) -> Result<Vec<FieldInit>, String> {
+    fn parse_struct_init_fields(&mut self) -> PResult<Vec<FieldInit>> {
         let mut fields = Vec::new();
         self.skip_comments();
         loop {
@@ -1258,7 +1275,7 @@ impl Parser {
         Ok(fields)
     }
 
-    fn parse_block_contents(&mut self) -> Result<Block, String> {
+    fn parse_block_contents(&mut self) -> PResult<Block> {
         let mut stmts = Vec::new();
         self.skip_comments();
         while !self.check(TokenKind::RightBrace) && self.pos < self.tokens.len() {
@@ -1292,7 +1309,7 @@ impl Parser {
         }
     }
 
-    fn parse_stmt(&mut self) -> Result<Stmt, String> {
+    fn parse_stmt(&mut self) -> PResult<Stmt> {
         if self.consume_if(TokenKind::Ret) {
             let expr = if !at_stmt_end(self) {
                 Some(self.parse_expr()?)
@@ -1385,9 +1402,7 @@ impl Parser {
                         value: Some(value),
                     }));
                 }
-                return Err(format!("Expected assignment after type at line {}", {
-                    self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0)
-                }));
+                return Err(self.mk_err("Expected assignment after type".into()));
             }
 
             let expr = Expr::Ident(name.clone());
@@ -1430,7 +1445,7 @@ impl Parser {
         Some(op)
     }
 
-    fn parse_if_inner(&mut self) -> Result<If, String> {
+    fn parse_if_inner(&mut self) -> PResult<If> {
         let cond = self.parse_expr_bp(0)?;
         let capture = self.parse_pipe_capture();
         self.expect(TokenKind::LeftBrace)?;
@@ -1455,7 +1470,7 @@ impl Parser {
         })
     }
 
-    fn parse_match_inner(&mut self) -> Result<Match, String> {
+    fn parse_match_inner(&mut self) -> PResult<Match> {
         let target = self.parse_match_target()?;
         self.expect(TokenKind::LeftBrace)?;
         let mut arms = Vec::new();
@@ -1472,7 +1487,7 @@ impl Parser {
                 });
                 self.consume_if(TokenKind::Comma);
             } else {
-                return Err("Expected '=>' in match arm".into());
+                return Err(self.mk_err("Expected '=>' in match arm".into()));
             }
             self.skip_comments();
         }
@@ -1480,7 +1495,7 @@ impl Parser {
         Ok(Match { target, arms })
     }
 
-    fn parse_loop_inner(&mut self) -> Result<Loop, String> {
+    fn parse_loop_inner(&mut self) -> PResult<Loop> {
         if self.check(TokenKind::LeftBrace) {
             self.advance();
             let body = self.parse_block_contents()?;
@@ -1509,43 +1524,43 @@ impl Parser {
         })
     }
 
-    fn parse_if_expr(&mut self) -> Result<Expr, String> {
+    fn parse_if_expr(&mut self) -> PResult<Expr> {
         let if_ = self.parse_if_inner()?;
         Ok(Expr::Block(Block {
             stmts: vec![Stmt::If(if_)],
         }))
     }
 
-    fn parse_match_expr(&mut self) -> Result<Expr, String> {
+    fn parse_match_expr(&mut self) -> PResult<Expr> {
         let m = self.parse_match_inner()?;
         Ok(Expr::Block(Block {
             stmts: vec![Stmt::Match(m)],
         }))
     }
 
-    fn parse_loop_expr(&mut self) -> Result<Expr, String> {
+    fn parse_loop_expr(&mut self) -> PResult<Expr> {
         let l = self.parse_loop_inner()?;
         Ok(Expr::Block(Block {
             stmts: vec![Stmt::Loop(l)],
         }))
     }
 
-    fn parse_if_stmt(&mut self) -> Result<Stmt, String> {
+    fn parse_if_stmt(&mut self) -> PResult<Stmt> {
         let if_ = self.parse_if_inner()?;
         Ok(Stmt::If(if_))
     }
 
-    fn parse_match_stmt(&mut self) -> Result<Stmt, String> {
+    fn parse_match_stmt(&mut self) -> PResult<Stmt> {
         let m = self.parse_match_inner()?;
         Ok(Stmt::Match(m))
     }
 
-    fn parse_loop_stmt(&mut self) -> Result<Stmt, String> {
+    fn parse_loop_stmt(&mut self) -> PResult<Stmt> {
         let l = self.parse_loop_inner()?;
         Ok(Stmt::Loop(l))
     }
 
-    fn parse_try_catch_stmt(&mut self) -> Result<Stmt, String> {
+    fn parse_try_catch_stmt(&mut self) -> PResult<Stmt> {
         if self.check(TokenKind::LeftBrace) {
             self.advance();
             let try_body = self.parse_block_contents()?;
@@ -1608,7 +1623,7 @@ impl Parser {
         }
     }
 
-    fn parse_pattern(&mut self) -> Result<Pattern, String> {
+    fn parse_pattern(&mut self) -> PResult<Pattern> {
         if self.consume_if(TokenKind::Underscore) {
             return Ok(Pattern::Wildcard);
         }
@@ -1627,11 +1642,7 @@ impl Parser {
             let name2 = self.expect_ident()?;
             return Ok(Pattern::Ident(name2));
         }
-        Err(format!(
-            "Expected pattern at {}:{}",
-            { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
-            { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
-        ))
+        Err(self.mk_err("Expected pattern".into()))
     }
 
     fn parse_single_capture(&mut self) -> Option<String> {
@@ -1767,7 +1778,7 @@ impl Parser {
         lhs: Expr,
         rhs: Expr,
         kind: Option<TokenKind>,
-    ) -> Result<Expr, String> {
+    ) -> PResult<Expr> {
         let op = match kind {
             Some(TokenKind::Plus) => BinaryOp::Add,
             Some(TokenKind::Minus) => BinaryOp::Sub,
@@ -1796,7 +1807,11 @@ impl Parser {
             Some(TokenKind::ColonEquals) => BinaryOp::ColonEq,
             Some(TokenKind::DotDot) => BinaryOp::Range,
             Some(TokenKind::DotDotEquals) => BinaryOp::RangeInclusive,
-            _ => return Err(format!("Unknown binary operator")),
+            _ => return Err(ParseError {
+                message: "Unknown binary operator".into(),
+                line: self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0),
+                col: self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0),
+            }),
         };
         Ok(Expr::Binary(op, Box::new(lhs), Box::new(rhs)))
     }
