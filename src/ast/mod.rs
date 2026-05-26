@@ -3,6 +3,12 @@ use crate::lexer::token::TokenKind;
 pub type Span = (usize, usize);
 
 #[derive(Debug, Clone)]
+pub struct Annotation {
+    pub name: String,
+    pub args: Vec<Expr>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Program {
     pub decls: Vec<Decl>,
 }
@@ -29,6 +35,7 @@ pub struct FnDecl {
     pub generics: Vec<String>,
     pub pub_: bool,
     pub external: bool,
+    pub attrs: Vec<Annotation>,
     pub params: Vec<Param>,
     pub return_: Option<Type>,
     pub body: Option<Block>,
@@ -40,6 +47,7 @@ pub struct StructDecl {
     pub generics: Vec<String>,
     pub impl_behave: Option<String>,
     pub pub_: bool,
+    pub attrs: Vec<Annotation>,
     pub fields: Vec<Field>,
     pub methods: Vec<FnDecl>,
 }
@@ -49,6 +57,7 @@ pub struct UnionDecl {
     pub name: String,
     pub generics: Vec<String>,
     pub pub_: bool,
+    pub attrs: Vec<Annotation>,
     pub variants: Vec<Field>,
 }
 
@@ -58,6 +67,7 @@ pub struct EnumDecl {
     pub generics: Vec<String>,
     pub impl_behave: Option<String>,
     pub pub_: bool,
+    pub attrs: Vec<Annotation>,
     pub variants: Vec<EnumVariant>,
     pub methods: Vec<FnDecl>,
 }
@@ -67,6 +77,7 @@ pub struct BehaveDecl {
     pub name: String,
     pub generics: Vec<String>,
     pub pub_: bool,
+    pub attrs: Vec<Annotation>,
     pub methods: Vec<FnDecl>,
 }
 
@@ -75,6 +86,7 @@ pub struct VarDecl {
     pub name: String,
     pub mutable: bool,
     pub pub_: bool,
+    pub attrs: Vec<Annotation>,
     pub type_: Option<Type>,
     pub value: Option<Expr>,
 }
@@ -82,6 +94,7 @@ pub struct VarDecl {
 #[derive(Debug, Clone)]
 pub struct ConstDecl {
     pub name: String,
+    pub attrs: Vec<Annotation>,
     pub type_: Option<Type>,
     pub value: Option<Expr>,
 }
@@ -143,6 +156,7 @@ pub enum Expr {
     Catch(Box<Expr>, Vec<String>, Box<Block>),
     Ret(Option<Box<Expr>>),
     Fn(FnDecl),
+    MapLiteral(Vec<(Expr, Expr)>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

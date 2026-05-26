@@ -1274,3 +1274,235 @@ fn test_behave_with_generics() {
         other => panic!("Expected Behave, got {:?}", other),
     }
 }
+
+// ---------------------------------------------------------------------------
+// 39. Attribute / annotation parsing (P-PARSER-04)
+// ---------------------------------------------------------------------------
+#[test]
+fn test_annotation_on_fn() {
+    let p = parse_ok("@inline main :: fn() -> void { }");
+    match &p.decls[0] {
+        Decl::Fn(f) => {
+            assert_eq!(f.attrs.len(), 1);
+            assert_eq!(f.attrs[0].name, "inline");
+            assert!(f.attrs[0].args.is_empty());
+        }
+        other => panic!("Expected Fn, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_annotation_with_args() {
+    let p = parse_ok("@export(\"name\") pub add :: fn(a: i32, b: i32) -> i32 { ret a + b }");
+    match &p.decls[0] {
+        Decl::Fn(f) => {
+            assert_eq!(f.attrs.len(), 1);
+            assert_eq!(f.attrs[0].name, "export");
+            assert_eq!(f.attrs[0].args.len(), 1);
+        }
+        other => panic!("Expected Fn, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_multiple_annotations() {
+    let p = parse_ok("@inline @deprecated(\"use other\") old_fn :: fn() -> void { }");
+    match &p.decls[0] {
+        Decl::Fn(f) => {
+            assert_eq!(f.attrs.len(), 2);
+            assert_eq!(f.attrs[0].name, "inline");
+            assert_eq!(f.attrs[1].name, "deprecated");
+        }
+        other => panic!("Expected Fn, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_annotation_on_struct() {
+    let p = parse_ok("@packed MyStruct :: struct { x: i32 }");
+    match &p.decls[0] {
+        Decl::Struct(s) => {
+            assert_eq!(s.attrs.len(), 1);
+            assert_eq!(s.attrs[0].name, "packed");
+        }
+        other => panic!("Expected Struct, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_annotation_on_var() {
+    let p = parse_ok("@thread_local mut counter := 0");
+    match &p.decls[0] {
+        Decl::Var(v) => {
+            assert_eq!(v.attrs.len(), 1);
+            assert_eq!(v.attrs[0].name, "thread_local");
+        }
+        other => panic!("Expected Var, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_annotation_on_const() {
+    let p = parse_ok("@used FOO :: 42");
+    match &p.decls[0] {
+        Decl::Const(c) => {
+            assert_eq!(c.attrs.len(), 1);
+            assert_eq!(c.attrs[0].name, "used");
+        }
+        other => panic!("Expected Const, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 40. Trailing commas consistency (P-PARSER-05)
+// ---------------------------------------------------------------------------
+#[test]
+fn test_trailing_comma_in_fn_params() {
+    let p = parse_ok("main :: fn(a: i32, ) -> void { }");
+    assert_eq!(p.decls.len(), 1);
+}
+
+#[test]
+fn test_trailing_comma_in_struct() {
+    let p = parse_ok("Point :: struct { x: i32, y: i32, }");
+    assert_eq!(p.decls.len(), 1);
+    match &p.decls[0] {
+        Decl::Struct(s) => assert_eq!(s.fields.len(), 2),
+        other => panic!("Expected Struct, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_trailing_comma_in_enum() {
+    let p = parse_ok("Color :: enum { Red, Green, Blue, }");
+    assert_eq!(p.decls.len(), 1);
+    match &p.decls[0] {
+        Decl::Enum(e) => assert_eq!(e.variants.len(), 3),
+        other => panic!("Expected Enum, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_trailing_comma_in_enum_values() {
+    let p = parse_ok("Status :: enum { Ok: i32, Error: str, }");
+    assert_eq!(p.decls.len(), 1);
+}
+
+#[test]
+fn test_trailing_comma_in_struct_init() {
+    let p = parse_ok("r :: Point{ x: 1, y: 2, }");
+    match &p.decls[0] {
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::StructInit(_, fields) => assert_eq!(fields.len(), 2),
+            other => panic!("Expected StructInit, got {:?}", other),
+        },
+        other => panic!("Expected Const, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_trailing_comma_in_call() {
+    let p = parse_ok("r :: add(1, 2, )");
+    match &p.decls[0] {
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Call(_, args) => assert_eq!(args.len(), 2),
+            other => panic!("Expected Call, got {:?}", other),
+        },
+        other => panic!("Expected Const, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_trailing_comma_in_generics() {
+    let p = parse_ok("convert<T, > :: fn(x: T) -> T { ret x }");
+    match &p.decls[0] {
+        Decl::Fn(f) => assert_eq!(f.generics, vec!["T"]),
+        other => panic!("Expected Fn, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 41. Pipe capture vs binary OR edge cases (P-PARSER-02)
+// ---------------------------------------------------------------------------
+#[test]
+fn test_pipe_with_nested_parens() {
+    let p = parse_ok("r :: x | (y | z)");
+    match &p.decls[0] {
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Binary(BinaryOp::BitOr, _, _) => {}
+            other => panic!("Expected BitOr, got {:?}", other),
+        },
+        other => panic!("Expected Const, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_pipe_or_with_block() {
+    let p = parse_ok("r :: flags | mask | 0");
+    match &p.decls[0] {
+        Decl::Const(c) => {
+            let val = c.value.as_ref().unwrap();
+            match val {
+                Expr::Binary(BinaryOp::BitOr, _, _) => {}
+                other => panic!("Expected BitOr top-level, got {:?}", other),
+            }
+        }
+        other => panic!("Expected Const, got {:?}", other),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 42. Error recovery (P-PARSER-01)
+// ---------------------------------------------------------------------------
+#[test]
+fn test_error_recovery_in_block() {
+    // Parse errors inside a block should be recovered (skip to boundary)
+    let p = parse_ok("main :: fn() -> void { let x = ; ret x }");
+    assert_eq!(p.decls.len(), 1);
+}
+
+#[test]
+fn test_error_recovery_multiple_errors() {
+    let p = parse_ok("main :: fn() -> void { let x = ; ; ; ret 0 }");
+    assert_eq!(p.decls.len(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// 43. Additional edge cases
+// ---------------------------------------------------------------------------
+#[test]
+fn test_multi_range_loop_trailing_comma() {
+    let p = parse_ok("main :: fn() -> void { loop xs, ys, |i, j| { } }");
+    match &p.decls[0] {
+        Decl::Fn(f) => {
+            let body = f.body.as_ref().unwrap();
+            match &body.stmts[0] {
+                Stmt::Loop(l) => {
+                    assert_eq!(l.conds.len(), 2);
+                    assert_eq!(l.captures.len(), 2);
+                }
+                other => panic!("Expected Loop, got {:?}", other),
+            }
+        }
+        other => panic!("Expected Fn, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_empty_block_body() {
+    let p = parse_ok("main :: fn() -> void { { } }");
+    assert_eq!(p.decls.len(), 1);
+}
+
+#[test]
+fn test_nested_annotation_and_pub() {
+    let p = parse_ok("@cold pub external_fn :: fn() -> i32 { ret 0 }");
+    match &p.decls[0] {
+        Decl::Fn(f) => {
+            assert!(f.pub_);
+            assert_eq!(f.attrs.len(), 1);
+            assert_eq!(f.attrs[0].name, "cold");
+        }
+        other => panic!("Expected Fn, got {:?}", other),
+    }
+}

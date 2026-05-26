@@ -271,6 +271,11 @@ fn print_decl(decl: &Decl, indent: usize) {
         }
         Decl::Fn(f) => {
             println!("{}{}Fn{} {}{}", i, LGREEN, RST, PEACH, f.name);
+            if !f.attrs.is_empty() {
+                for a in &f.attrs {
+                    print_annotation(a, indent + 1);
+                }
+            }
             if !f.generics.is_empty() {
                 println!("{}  {}Generics{} {:?}", i, YELLOW, RST, f.generics);
             }
@@ -299,6 +304,11 @@ fn print_decl(decl: &Decl, indent: usize) {
         }
         Decl::Struct(s) => {
             println!("{}{}Struct{} {}{}", i, GREEN, RST, PEACH, s.name);
+            if !s.attrs.is_empty() {
+                for a in &s.attrs {
+                    print_annotation(a, indent + 1);
+                }
+            }
             if !s.generics.is_empty() {
                 println!("{}  {}Generics{} {:?}", i, YELLOW, RST, s.generics);
             }
@@ -342,6 +352,11 @@ fn print_decl(decl: &Decl, indent: usize) {
         }
         Decl::Union(u) => {
             println!("{}{}Union{} {}{}", i, GREEN, RST, PEACH, u.name);
+            if !u.attrs.is_empty() {
+                for a in &u.attrs {
+                    print_annotation(a, indent + 1);
+                }
+            }
             for v in &u.variants {
                 println!(
                     "{}  {}Variant{} {}{} {}{}",
@@ -357,6 +372,11 @@ fn print_decl(decl: &Decl, indent: usize) {
         }
         Decl::Enum(e) => {
             println!("{}{}Enum{} {}{}", i, GREEN, RST, PEACH, e.name);
+            if !e.attrs.is_empty() {
+                for a in &e.attrs {
+                    print_annotation(a, indent + 1);
+                }
+            }
             for v in &e.variants {
                 if let Some(ref t) = v.type_ {
                     println!(
@@ -382,6 +402,11 @@ fn print_decl(decl: &Decl, indent: usize) {
         }
         Decl::Behave(b) => {
             println!("{}{}Behave{} {}{}", i, GREEN, RST, PEACH, b.name);
+            if !b.attrs.is_empty() {
+                for a in &b.attrs {
+                    print_annotation(a, indent + 1);
+                }
+            }
             for m in &b.methods {
                 println!("{}  {}Method{} {}{}", i, MAGENTA, RST, PEACH, m.name);
                 for p in &m.params {
@@ -403,6 +428,11 @@ fn print_decl(decl: &Decl, indent: usize) {
         }
         Decl::Var(v) => {
             let kind = if v.mutable { "mut" } else { "let" };
+            if !v.attrs.is_empty() {
+                for a in &v.attrs {
+                    print_annotation(a, indent);
+                }
+            }
             if let Some(ref t) = v.type_ {
                 println!(
                     "{}{}{}{} {}{} {}{} =",
@@ -423,6 +453,11 @@ fn print_decl(decl: &Decl, indent: usize) {
             }
         }
         Decl::Const(c) => {
+            if !c.attrs.is_empty() {
+                for a in &c.attrs {
+                    print_annotation(a, indent);
+                }
+            }
             if let Some(ref t) = c.type_ {
                 println!(
                     "{}{}Const{} {}{} {}{} ::",
@@ -805,4 +840,14 @@ fn assign_op_str(op: &AssignOp) -> &'static str {
 
 pub fn print_error(err: &str) {
     eprintln!("{}Error:{} {}", RED, RST, err);
+}
+
+fn print_annotation(a: &Annotation, indent: usize) {
+    let i = "  ".repeat(indent);
+    if a.args.is_empty() {
+        println!("{}{}@{}", i, YELLOW, a.name);
+    } else {
+        let args_str: Vec<String> = a.args.iter().map(|e| expr_short_str(e)).collect();
+        println!("{}{}@{}({})", i, YELLOW, a.name, args_str.join(", "));
+    }
 }

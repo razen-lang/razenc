@@ -659,9 +659,9 @@ Builtin functions are hardcoded into the compiler and always prefixed with `@`.
 
 **Materialization**
 * `@str.from_raw(ptr, len)` : Constructs a `str` slice from a raw pointer and length.
-* `@vec(elements...)`       : Instantiates a vector at stack or comptime.
-* `@map(pairs...)`          : Instantiates a primitive hash map.
-* `@set(elements...)`       : Instantiates a unique hash set.
+* `@vec[elements...]`       : Instantiates a vector at stack or comptime.
+* `@map{pairs...}`          : Instantiates a primitive hash map.
+* `@set{elements...}`       : Instantiates a unique hash set.
 
 **Math (Overflow-Safe)**
 * `@addWithOverflow(a, b)` : Returns `(result, did_overflow)`.

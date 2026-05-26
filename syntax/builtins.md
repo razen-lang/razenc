@@ -37,9 +37,9 @@ Builtins are hardcoded directly into `razenc`. They provide type reflection, mem
 | **`@trap()`** | Control Flow | Aborts via CPU illegal instruction signal. |
 | **`@sysCall(num, args...)`** | OS Interface | Raw kernel syscall — dependency-free I/O without libc. |
 | **`@str.from_raw(ptr, len)`** | Materialization | Constructs a `str` slice from a raw memory pointer and length. |
-| **`@vec(elements...)`** | Materialization | Instantiates a vector at stack or comptime. |
-| **`@map(pairs...)`** | Materialization | Instantiates a compiler-optimized primitive hash map. |
-| **`@set(elements...)`** | Materialization | Instantiates a unique hash set. |
+| **`@vec[elements...]`** | Materialization | Instantiates a vector at stack or comptime. |
+| **`@map{pairs...}`** | Materialization | Instantiates a compiler-optimized primitive hash map. |
+| **`@set{elements...}`** | Materialization | Instantiates a unique hash set. |
 | **`@addWithOverflow(a, b)`** | Math | Returns `(result, did_overflow)`. |
 | **`@subWithOverflow(a, b)`** | Math | Returns `(result, did_underflow)`. |
 | **`@mulWithOverflow(a, b)`** | Math | Returns `(result, did_overflow)`. |

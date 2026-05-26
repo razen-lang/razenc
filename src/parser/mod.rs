@@ -21,7 +21,7 @@ impl Parser {
                 Ok(d) => decls.push(d),
                 Err(e) => {
                     errors.push(e);
-                    self.advance();
+                    self.skip_to_decl_boundary();
                 }
             }
             self.skip_comments();
@@ -67,8 +67,8 @@ impl Parser {
                 Ok(t)
             }
             Some(t) => Err(format!(
-                "Expected '{}', found '{}' at line {}",
-                kind, t.kind, t.line
+                "Expected '{}', found '{}' at {}:{}",
+                kind, t.kind, t.line, t.col
             )),
             None => Err(format!("Expected '{}', reached end of file", kind)),
         }
@@ -102,8 +102,8 @@ impl Parser {
                 Ok(name)
             }
             Some(t) => Err(format!(
-                "Expected identifier at line {}, found '{}'",
-                t.line, t.kind
+                "Expected identifier at {}:{}, found '{}'",
+                t.line, t.col, t.kind
             )),
             None => Err("Expected identifier, reached end of file".into()),
         }
@@ -123,6 +123,7 @@ impl Parser {
     }
 
     fn parse_decl(&mut self) -> Result<Decl, String> {
+        let attrs = self.parse_attrs();
         let pub_ = self.consume_if(TokenKind::Pub);
         let ext = self.consume_if(TokenKind::Ext);
         let mut_ = self.consume_if(TokenKind::Mut);
@@ -134,7 +135,14 @@ impl Parser {
             return self.parse_mod(pub_);
         }
 
-        let name = self.expect_ident()?;
+        let name = self.expect_ident().map_err(|e| {
+            format!("{} at line {}", e, {
+                self.tokens
+                    .get(self.pos)
+                    .map(|t| format!("{}:{}", t.line, t.col))
+                    .unwrap_or_else(|| "0:0".into())
+            })
+        })?;
         let generics = if self.consume_if(TokenKind::Less) {
             let g = self.parse_generic_params()?;
             self.expect(TokenKind::Greater)?;
@@ -144,13 +152,12 @@ impl Parser {
         };
 
         if self.consume_if(TokenKind::ColonColon) {
-            self.parse_const_like(name, generics, pub_, ext)
+            self.parse_const_like(name, generics, pub_, ext, attrs)
         } else if self.consume_if(TokenKind::ColonEquals) {
-            self.parse_var_like(name, mut_, pub_)
+            self.parse_var_like(name, mut_, pub_, attrs)
         } else if self.consume_if(TokenKind::Colon) {
-            self.parse_explicit_type_decl(name, mut_, pub_)
+            self.parse_explicit_type_decl(name, mut_, pub_, attrs)
         } else {
-            // Try as expression (e.g., assignment at top level)
             let mut expr = Expr::Ident(name);
             expr = self.parse_postfix(expr)?;
             if let Some(op) = self.try_assign_op() {
@@ -158,6 +165,7 @@ impl Parser {
                 self.expect_newline_or_semi();
                 Ok(Decl::Const(ConstDecl {
                     name: String::new(),
+                    attrs,
                     type_: None,
                     value: Some(Expr::Binary(
                         assign_op_to_binary_op(op),
@@ -169,9 +177,79 @@ impl Parser {
                 self.expect_newline_or_semi();
                 Ok(Decl::Const(ConstDecl {
                     name: String::new(),
+                    attrs,
                     type_: None,
                     value: Some(expr),
                 }))
+            }
+        }
+    }
+
+    fn parse_attrs(&mut self) -> Vec<Annotation> {
+        let mut attrs = Vec::new();
+        loop {
+            if self.peek_kind() != Some(TokenKind::At) {
+                break;
+            }
+            let next = self.tokens.get(self.pos + 1);
+            let is_attr = match next {
+                Some(t) if t.kind == TokenKind::Identifier => true,
+                Some(t) if is_type_keyword(&t.kind) => false,
+                _ => false,
+            };
+            if !is_attr {
+                break;
+            }
+            self.advance();
+            let name = self.expect_ident().unwrap_or_default();
+            let args = if self.consume_if(TokenKind::LeftParen) {
+                let mut a = Vec::new();
+                loop {
+                    if self.check(TokenKind::RightParen) {
+                        break;
+                    }
+                    match self.parse_expr() {
+                        Ok(e) => a.push(e),
+                        Err(_) => break,
+                    }
+                    if !self.consume_if(TokenKind::Comma) {
+                        break;
+                    }
+                }
+                let _ = self.expect(TokenKind::RightParen);
+                a
+            } else {
+                Vec::new()
+            };
+            attrs.push(Annotation { name, args });
+        }
+        attrs
+    }
+
+    fn skip_to_decl_boundary(&mut self) {
+        loop {
+            match self.peek_kind() {
+                None | Some(TokenKind::Eof) => return,
+                Some(TokenKind::Semicolon) => {
+                    self.advance();
+                    return;
+                }
+                Some(TokenKind::Identifier)
+                | Some(TokenKind::Pub)
+                | Some(TokenKind::Ext)
+                | Some(TokenKind::Use)
+                | Some(TokenKind::Mod)
+                    if self.pos > 0 =>
+                {
+                    let prev = &self.tokens[self.pos - 1];
+                    if prev.line < self.tokens[self.pos].line {
+                        return;
+                    }
+                    self.advance();
+                }
+                _ => {
+                    self.advance();
+                }
             }
         }
     }
@@ -228,48 +306,57 @@ impl Parser {
         generics: Vec<String>,
         pub_: bool,
         ext: bool,
+        attrs: Vec<Annotation>,
     ) -> Result<Decl, String> {
         if self.check(TokenKind::Fn) {
-            return self.parse_fn_decl(name, generics, pub_, ext);
+            return self.parse_fn_decl(name, generics, pub_, ext, attrs);
         }
         if self.check(TokenKind::Struct) {
-            return self.parse_struct_decl(name, generics, pub_);
+            return self.parse_struct_decl(name, generics, pub_, attrs);
         }
         if self.check(TokenKind::Union) {
-            return self.parse_union_decl(name, generics, pub_);
+            return self.parse_union_decl(name, generics, pub_, attrs);
         }
         if self.check(TokenKind::Enum) {
-            return self.parse_enum_decl(name, generics, pub_);
+            return self.parse_enum_decl(name, generics, pub_, attrs);
         }
         if self.check(TokenKind::ErrorKw) {
-            return self.parse_error_decl(name, generics);
+            return self.parse_error_decl(name, generics, attrs);
         }
         if self.check(TokenKind::Behave) {
-            return self.parse_behave_decl(name, generics, pub_);
+            return self.parse_behave_decl(name, generics, pub_, attrs);
         }
         if self.check(TokenKind::Type) {
-            return self.parse_type_alias(name, generics, pub_);
+            return self.parse_type_alias(name, generics, pub_, attrs);
         }
         if self.check(TokenKind::Test) {
-            return self.parse_test_decl(name, pub_);
+            return self.parse_test_decl(name, pub_, attrs);
         }
 
         let value = self.parse_expr()?;
         self.expect_newline_or_semi();
         Ok(Decl::Const(ConstDecl {
             name,
+            attrs,
             type_: None,
             value: Some(value),
         }))
     }
 
-    fn parse_var_like(&mut self, name: String, mut_: bool, pub_: bool) -> Result<Decl, String> {
+    fn parse_var_like(
+        &mut self,
+        name: String,
+        mut_: bool,
+        pub_: bool,
+        attrs: Vec<Annotation>,
+    ) -> Result<Decl, String> {
         let value = self.parse_expr()?;
         self.expect_newline_or_semi();
         Ok(Decl::Var(VarDecl {
             name,
             mutable: mut_,
             pub_,
+            attrs,
             type_: None,
             value: Some(value),
         }))
@@ -280,6 +367,7 @@ impl Parser {
         name: String,
         mut_: bool,
         pub_: bool,
+        attrs: Vec<Annotation>,
     ) -> Result<Decl, String> {
         let type_ = self.parse_type()?;
         if self.consume_if(TokenKind::ColonEquals) || self.consume_if(TokenKind::Assign) {
@@ -289,6 +377,7 @@ impl Parser {
                 name,
                 mutable: mut_,
                 pub_,
+                attrs,
                 type_: Some(type_),
                 value: Some(value),
             }))
@@ -297,13 +386,15 @@ impl Parser {
             self.expect_newline_or_semi();
             Ok(Decl::Const(ConstDecl {
                 name,
+                attrs,
                 type_: Some(type_),
                 value: Some(value),
             }))
         } else {
             Err(format!(
-                "Expected ':=', ':', or '=' after type at line {}",
-                { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) }
+                "Expected ':=', ':', or '=' after type at line {}:{}",
+                { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
+                { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
             ))
         }
     }
@@ -314,6 +405,7 @@ impl Parser {
         generics: Vec<String>,
         pub_: bool,
         ext: bool,
+        attrs: Vec<Annotation>,
     ) -> Result<Decl, String> {
         self.advance();
         self.expect(TokenKind::LeftParen)?;
@@ -340,6 +432,7 @@ impl Parser {
             generics,
             pub_,
             external: ext,
+            attrs,
             params,
             return_,
             body,
@@ -373,6 +466,7 @@ impl Parser {
         name: String,
         generics: Vec<String>,
         pub_: bool,
+        attrs: Vec<Annotation>,
     ) -> Result<Decl, String> {
         self.advance();
         let impl_behave = if self.consume_if(TokenKind::TildeArrow) {
@@ -407,8 +501,9 @@ impl Parser {
                     self.consume_if(TokenKind::Comma);
                 } else {
                     return Err(format!(
-                        "Expected ':' or '::' after field name at line {}",
-                        { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) }
+                        "Expected ':' or '::' after field name at {}:{}",
+                        { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
+                        { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
                     ));
                 }
             } else {
@@ -423,6 +518,7 @@ impl Parser {
             generics,
             impl_behave,
             pub_,
+            attrs,
             fields,
             methods,
         }))
@@ -433,6 +529,7 @@ impl Parser {
         name: String,
         generics: Vec<String>,
         pub_: bool,
+        attrs: Vec<Annotation>,
     ) -> Result<Decl, String> {
         self.advance();
         let mut variants = Vec::new();
@@ -449,9 +546,11 @@ impl Parser {
                         type_,
                     });
                 } else {
-                    return Err(format!("Expected ':' after variant name at line {}", {
-                        self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0)
-                    }));
+                    return Err(format!(
+                        "Expected ':' after variant name at {}:{}",
+                        { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
+                        { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
+                    ));
                 }
                 self.consume_if(TokenKind::Comma);
             } else {
@@ -464,6 +563,7 @@ impl Parser {
             name,
             generics,
             pub_,
+            attrs,
             variants,
         }))
     }
@@ -473,6 +573,7 @@ impl Parser {
         name: String,
         generics: Vec<String>,
         pub_: bool,
+        attrs: Vec<Annotation>,
     ) -> Result<Decl, String> {
         self.advance();
         let impl_behave = if self.consume_if(TokenKind::TildeArrow) {
@@ -523,12 +624,18 @@ impl Parser {
             generics,
             impl_behave,
             pub_,
+            attrs,
             variants,
             methods,
         }))
     }
 
-    fn parse_error_decl(&mut self, name: String, _generics: Vec<String>) -> Result<Decl, String> {
+    fn parse_error_decl(
+        &mut self,
+        name: String,
+        _generics: Vec<String>,
+        _attrs: Vec<Annotation>,
+    ) -> Result<Decl, String> {
         self.advance();
         let mut variants = Vec::new();
         self.expect(TokenKind::LeftBrace)?;
@@ -551,6 +658,7 @@ impl Parser {
         name: String,
         generics: Vec<String>,
         pub_: bool,
+        attrs: Vec<Annotation>,
     ) -> Result<Decl, String> {
         self.advance();
         let mut methods = Vec::new();
@@ -578,6 +686,7 @@ impl Parser {
             name,
             generics,
             pub_,
+            attrs,
             methods,
         }))
     }
@@ -587,6 +696,7 @@ impl Parser {
         name: String,
         _generics: Vec<String>,
         _pub_: bool,
+        _attrs: Vec<Annotation>,
     ) -> Result<Decl, String> {
         self.advance();
         self.expect(TokenKind::LeftParen)?;
@@ -596,7 +706,12 @@ impl Parser {
         Ok(Decl::TypeAlias(name, type_))
     }
 
-    fn parse_test_decl(&mut self, name: String, _pub_: bool) -> Result<Decl, String> {
+    fn parse_test_decl(
+        &mut self,
+        name: String,
+        _pub_: bool,
+        _attrs: Vec<Annotation>,
+    ) -> Result<Decl, String> {
         self.advance();
         self.expect(TokenKind::LeftBrace)?;
         let body = self.parse_block_contents()?;
@@ -625,6 +740,7 @@ impl Parser {
             generics: Vec::new(),
             pub_,
             external: false,
+            attrs: Vec::new(),
             params,
             return_,
             body,
@@ -721,9 +837,11 @@ impl Parser {
             return Ok(Type::ErrorUnion(None, Box::new(ok)));
         }
 
-        Err(format!("Expected type at line {}", {
-            self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0)
-        }))
+        Err(format!(
+            "Expected type at {}:{}",
+            { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
+            { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
+        ))
     }
 
     fn parse_fn_type(&mut self) -> Result<Type, String> {
@@ -830,13 +948,15 @@ impl Parser {
         if i >= len {
             return false;
         }
-        // Skip past comma-separated capture names (e.g., |i, j| or |&mut elem|)
+
+        let mut had_content = false;
         loop {
             if i >= len {
                 return false;
             }
             match &self.tokens[i].kind {
                 TokenKind::And => {
+                    had_content = true;
                     i += 1;
                     if i < len && self.tokens[i].kind == TokenKind::Mut {
                         i += 1;
@@ -848,6 +968,7 @@ impl Parser {
                     }
                 }
                 TokenKind::Mut => {
+                    had_content = true;
                     i += 1;
                     if i < len && self.tokens[i].kind == TokenKind::Identifier {
                         i += 1;
@@ -856,6 +977,7 @@ impl Parser {
                     }
                 }
                 TokenKind::Identifier => {
+                    had_content = true;
                     i += 1;
                 }
                 _ => break,
@@ -866,6 +988,12 @@ impl Parser {
             }
             break;
         }
+
+        // If there was no content between pipes (e.g., empty ||), it's not a capture
+        if !had_content {
+            return false;
+        }
+
         if i >= len || self.tokens[i].kind != TokenKind::Pipe {
             return false;
         }
@@ -873,9 +1001,16 @@ impl Parser {
         if i >= len {
             return false;
         }
+
+        // After closing |, a capture must be followed by {, =>, or be inside a ,-
+        // separated list or matched by another |
         matches!(
             &self.tokens[i].kind,
-            TokenKind::LeftBrace | TokenKind::FatArrow | TokenKind::Comma | TokenKind::Pipe
+            TokenKind::LeftBrace
+                | TokenKind::FatArrow
+                | TokenKind::Comma
+                | TokenKind::Pipe
+                | TokenKind::RightBrace
         )
     }
 
@@ -946,6 +1081,7 @@ impl Parser {
                     generics: Vec::new(),
                     pub_: false,
                     external: false,
+                    attrs: Vec::new(),
                     params,
                     return_,
                     body: Some(body),
@@ -1028,12 +1164,13 @@ impl Parser {
                 Ok(expr)
             }
             Some(_) => Err(format!(
-                "Unexpected token '{}' at line {}",
+                "Unexpected token '{}' at {}:{}",
                 self.tokens
                     .get(self.pos)
                     .map(|t| t.kind.to_string())
                     .unwrap_or_default(),
-                self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0)
+                self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0),
+                self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0)
             )),
             None => Err("Unexpected end of input".into()),
         }
@@ -1125,11 +1262,34 @@ impl Parser {
         let mut stmts = Vec::new();
         self.skip_comments();
         while !self.check(TokenKind::RightBrace) && self.pos < self.tokens.len() {
-            stmts.push(self.parse_stmt()?);
+            match self.parse_stmt() {
+                Ok(stmt) => stmts.push(stmt),
+                Err(_) => {
+                    self.recover_stmt();
+                }
+            }
             self.skip_comments();
         }
         self.expect(TokenKind::RightBrace)?;
         Ok(Block { stmts })
+    }
+
+    fn recover_stmt(&mut self) {
+        loop {
+            match self.peek_kind() {
+                None => return,
+                Some(TokenKind::Eof) => return,
+                Some(TokenKind::Semicolon) => {
+                    self.advance();
+                    return;
+                }
+                Some(TokenKind::RightBrace) => return,
+                Some(TokenKind::RightParen) => return,
+                _ => {
+                    self.advance();
+                }
+            }
+        }
     }
 
     fn parse_stmt(&mut self) -> Result<Stmt, String> {
@@ -1182,6 +1342,7 @@ impl Parser {
                     name,
                     mutable: mut_,
                     pub_,
+                    attrs: Vec::new(),
                     type_: None,
                     value: Some(value),
                 }));
@@ -1193,6 +1354,7 @@ impl Parser {
                     name,
                     mutable: mut_,
                     pub_,
+                    attrs: Vec::new(),
                     type_: None,
                     value: Some(value),
                 }));
@@ -1206,6 +1368,7 @@ impl Parser {
                         name,
                         mutable: mut_,
                         pub_,
+                        attrs: Vec::new(),
                         type_: Some(type_),
                         value: Some(value),
                     }));
@@ -1217,6 +1380,7 @@ impl Parser {
                         name,
                         mutable: mut_,
                         pub_,
+                        attrs: Vec::new(),
                         type_: Some(type_),
                         value: Some(value),
                     }));
@@ -1329,6 +1493,10 @@ impl Parser {
         let mut conds = Vec::new();
         conds.push(self.parse_expr_bp(0)?);
         while self.consume_if(TokenKind::Comma) {
+            // If the next token is | (capture start), stop collecting conds
+            if self.peek_kind() == Some(TokenKind::Pipe) {
+                break;
+            }
             conds.push(self.parse_expr_bp(0)?);
         }
         let captures = self.parse_captures();
@@ -1459,9 +1627,11 @@ impl Parser {
             let name2 = self.expect_ident()?;
             return Ok(Pattern::Ident(name2));
         }
-        Err(format!("Expected pattern at line {}", {
-            self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0)
-        }))
+        Err(format!(
+            "Expected pattern at {}:{}",
+            { self.tokens.get(self.pos).map(|t| t.line).unwrap_or(0) },
+            { self.tokens.get(self.pos).map(|t| t.col).unwrap_or(0) }
+        ))
     }
 
     fn parse_single_capture(&mut self) -> Option<String> {
