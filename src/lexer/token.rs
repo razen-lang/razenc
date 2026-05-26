@@ -1,5 +1,7 @@
 use std::fmt;
 
+pub type Span = (usize, usize);
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // Control Flow
@@ -53,6 +55,9 @@ pub enum TokenKind {
 
     // Comments
     LineComment, BlockComment,
+
+    // End of file
+    Eof,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,11 +73,50 @@ pub struct Token {
     pub value: String,
     pub line: usize,
     pub col: usize,
+    pub span: Span,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, value: String, line: usize, col: usize) -> Self {
-        Token { kind, value, line, col }
+    pub fn new(kind: TokenKind, value: String, line: usize, col: usize, span: Span) -> Self {
+        Token { kind, value, line, col, span }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LexError {
+    pub message: String,
+    pub line: usize,
+    pub col: usize,
+    pub span: Span,
+}
+
+impl LexError {
+    pub fn new(message: String, line: usize, col: usize, span: Span) -> Self {
+        LexError { message, line, col, span }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TokenizationResult {
+    pub tokens: Vec<Token>,
+    pub errors: Vec<LexError>,
+}
+
+impl TokenizationResult {
+    pub fn new() -> Self {
+        TokenizationResult { tokens: Vec::new(), errors: Vec::new() }
+    }
+
+    pub fn push(&mut self, token: Token) {
+        self.tokens.push(token);
+    }
+
+    pub fn error(&mut self, err: LexError) {
+        self.errors.push(err);
+    }
+
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
     }
 }
 
@@ -221,6 +265,9 @@ impl fmt::Display for TokenKind {
             // Comments
             TokenKind::LineComment => write!(f, "line_comment"),
             TokenKind::BlockComment => write!(f, "block_comment"),
+
+            // End of file
+            TokenKind::Eof => write!(f, "eof"),
         }
     }
 }

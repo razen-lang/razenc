@@ -49,15 +49,24 @@ fn process_file(file_path: &PathBuf, verbose: bool) {
     }
 
     let lexer = crate::lexer::Lexer::new(&source);
-    let tokens = lexer.tokenize();
+    let token_result = lexer.tokenize();
+
+    if !token_result.errors.is_empty() {
+        for err in &token_result.errors {
+            crate::bdg::print_error(&format!(
+                "[Lexer] {} at line {}, col {}",
+                err.message, err.line, err.col
+            ));
+        }
+    }
 
     if verbose {
-        crate::bdg::print_token_count(tokens.len());
-        crate::bdg::print_tokens(&tokens);
+        crate::bdg::print_token_count(token_result.tokens.len());
+        crate::bdg::print_tokens(&token_result.tokens);
         crate::bdg::print_footer("Lexer\t\tDone");
     }
 
-    let mut parser = crate::parser::Parser::new(tokens);
+    let mut parser = crate::parser::Parser::new(token_result.tokens);
     let program = match parser.parse() {
         Ok(program) => {
             if verbose {

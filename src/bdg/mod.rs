@@ -156,6 +156,9 @@ fn kind_color(kind: &TokenKind) -> &'static str {
 
         // Or is no longer emitted by lexer (Pipe is used instead)
         TokenKind::Or => YELLOW,
+
+        // End of file
+        TokenKind::Eof => MAGENTA,
     }
 }
 
@@ -214,11 +217,12 @@ pub fn print_tokens(tokens: &[Token]) {
         let c = spanned_color(&SpannedTokenKind::Token(token.kind.clone()));
 
         let line = token.line;
+        let span = token.span;
         println!(
             "  {g}[{i:>3}]{r}  {g}Type:{r} {c}{k}{r}  \
-             {g}Value:{r} {o}{v}{r}  {g}Line:{r} {l}",
+             {g}Value:{r} {o}{v}{r}  {g}Line:{r} {l}  {g}Span:{r} {sp}:{ep}",
             g = GREY, r = RST, i = i, c = c, k = kind_str,
-            o = ORNG, v = value_str, l = line,
+            o = ORNG, v = value_str, l = line, sp = span.0, ep = span.1,
         );
     }
 }
