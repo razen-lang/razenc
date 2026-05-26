@@ -186,7 +186,7 @@ impl SemanticAnalyzer {
                     let resolve = |n: &str| self.table.lookup_type(n);
                     resolve_ast_type(t, &resolve).ok()
                 }).unwrap_or(TypeInfo::Void);
-                let sym = Symbol::Variable { type_: const_type, mutable: c.mutable, is_const: true };
+                let sym = Symbol::Variable { type_: const_type, mutable: false, is_const: true };
                 if self.table.lookup_in_current(&c.name).is_some() {
                     return Err(format!("Duplicate declaration: symbol '{}' is already defined in this scope", c.name));
                 }
@@ -305,7 +305,7 @@ impl SemanticAnalyzer {
                             if let Symbol::Variable { type_, .. } = sym {
                                 if type_.is_void() {
                                     let _ = self.table.insert_overwrite(&c.name, Symbol::Variable {
-                                        type_: vi.clone(), mutable: c.mutable, is_const: true,
+                                        type_: vi.clone(), mutable: false, is_const: true,
                                     });
                                 }
                             }

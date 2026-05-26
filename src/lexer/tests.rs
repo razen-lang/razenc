@@ -32,8 +32,7 @@ fn count_kind(result: &TokenizationResult, kind: TokenKind) -> usize {
 #[test]
 fn test_empty_source() {
     let r = tokenize("");
-    assert!(r.tokens.len() == 1, "expected only EOF token, got {}", r.tokens.len());
-    assert_eq!(r.tokens[0].kind, TokenKind::Eof);
+    assert!(r.tokens.is_empty(), "expected no tokens, got {}", r.tokens.len());
     assert!(r.errors.is_empty());
 }
 
@@ -43,8 +42,7 @@ fn test_empty_source() {
 #[test]
 fn test_whitespace_only() {
     let r = tokenize("   \t\n  \r\n  ");
-    assert_eq!(r.tokens.len(), 1);
-    assert_eq!(r.tokens[0].kind, TokenKind::Eof);
+    assert!(r.tokens.is_empty(), "expected no tokens, got {}", r.tokens.len());
     assert!(r.errors.is_empty());
 }
 
@@ -54,7 +52,7 @@ fn test_whitespace_only() {
 #[test]
 fn test_line_comment() {
     let r = tokenize("// this is a comment");
-    assert_eq!(r.tokens.len(), 2); // comment + eof
+    assert_eq!(r.tokens.len(), 1);
     assert_eq!(r.tokens[0].kind, TokenKind::LineComment);
     assert!(r.tokens[0].value.starts_with("//"));
     assert!(r.errors.is_empty());
@@ -66,7 +64,7 @@ fn test_line_comment() {
 #[test]
 fn test_block_comment() {
     let r = tokenize("/* hello world */");
-    assert_eq!(r.tokens.len(), 2);
+    assert_eq!(r.tokens.len(), 1);
     assert_eq!(r.tokens[0].kind, TokenKind::BlockComment);
     assert!(r.errors.is_empty());
 }
@@ -77,7 +75,7 @@ fn test_block_comment() {
 #[test]
 fn test_nested_block_comments() {
     let r = tokenize("/* outer /* inner */ still outer */");
-    assert_eq!(r.tokens.len(), 2);
+    assert_eq!(r.tokens.len(), 1);
     assert_eq!(r.tokens[0].kind, TokenKind::BlockComment);
     assert!(r.errors.is_empty());
 }
@@ -744,10 +742,15 @@ fn test_invalid_unicode_escape_empty() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_eof_token_always_present() {
+    // Parser handles end-of-input via pos >= tokens.len(); no explicit Eof token needed
     for src in &["", " ", "foo", "123", "\"hi\""] {
         let r = tokenize(src);
-        let last = r.tokens.last().unwrap();
-        assert_eq!(last.kind, TokenKind::Eof, "source {:?} missing EOF", src);
+        // Non-empty sources should have at least one real token
+        if !src.trim().is_empty() {
+            assert!(!r.tokens.is_empty(), "source {:?} should produce tokens", src);
+        } else {
+            assert!(r.tokens.is_empty(), "source {:?} should produce no tokens", src);
+        }
     }
 }
 

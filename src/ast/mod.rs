@@ -28,6 +28,7 @@ pub struct FnDecl {
     pub name: String,
     pub generics: Vec<String>,
     pub pub_: bool,
+    pub external: bool,
     pub params: Vec<Param>,
     pub return_: Option<Type>,
     pub body: Option<Block>,
@@ -81,7 +82,6 @@ pub struct VarDecl {
 #[derive(Debug, Clone)]
 pub struct ConstDecl {
     pub name: String,
-    pub mutable: bool,
     pub type_: Option<Type>,
     pub value: Option<Expr>,
 }
@@ -137,11 +137,12 @@ pub enum Expr {
     Slice(Box<Expr>, Box<Expr>, Box<Expr>, bool),
     StructInit(String, Vec<FieldInit>),
     Deref(Box<Expr>),
-    Range(Box<Expr>, Box<Expr>, bool),
     Block(Block),
     Paren(Box<Expr>),
     AtMethod(Box<Expr>, String),
     Catch(Box<Expr>, Vec<String>, Box<Block>),
+    Ret(Option<Box<Expr>>),
+    Fn(FnDecl),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -206,7 +207,7 @@ pub struct MatchArm {
 
 #[derive(Debug, Clone)]
 pub struct Loop {
-    pub cond: Option<Expr>,
+    pub conds: Vec<Expr>,
     pub captures: Vec<Capture>,
     pub body: Block,
 }

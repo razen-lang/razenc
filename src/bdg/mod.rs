@@ -435,7 +435,7 @@ fn print_stmt(stmt: &Stmt, indent: usize) {
         }
         Stmt::Loop(l) => {
             println!("{}{}loop{}", i, MAGENTA, RST);
-            if let Some(ref c) = l.cond {
+            for c in &l.conds {
                 print_expr(c, indent + 1);
             }
             if !l.captures.is_empty() {
@@ -532,12 +532,6 @@ fn print_expr(expr: &Expr, indent: usize) {
             println!("{}{}Deref{} .*", i, YELLOW, RST);
             print_expr(e, indent + 1);
         }
-        Expr::Range(s, e, incl) => {
-            let op = if *incl { "..=" } else { ".." };
-            println!("{}{}Range{} {}", i, YELLOW, RST, op);
-            print_expr(s, indent + 1);
-            print_expr(e, indent + 1);
-        }
         Expr::Block(b) => {
             print_block(b, indent);
         }
@@ -553,6 +547,24 @@ fn print_expr(expr: &Expr, indent: usize) {
             println!("{}{}Catch{} |{}|", i, YELLOW, RST, capture.join(", "));
             print_expr(expr, indent + 1);
             print_block(body, indent + 1);
+        }
+        Expr::Ret(value) => {
+            println!("{}{}Ret{}", i, YELLOW, RST);
+            if let Some(val) = value {
+                print_expr(val, indent + 1);
+            }
+        }
+        Expr::Fn(fndecl) => {
+            println!("{}{}Fn{} {}", i, CYAN, RST, fndecl.name);
+            for p in &fndecl.params {
+                println!("{}  {}{}Param{} {}: {}", i, YELLOW, if p.mutable { "mut " } else { "" }, RST, p.name, type_str(&p.type_));
+            }
+            if let Some(ret) = &fndecl.return_ {
+                println!("{}  {}Return{} {}", i, YELLOW, RST, type_str(ret));
+            }
+            if let Some(body) = &fndecl.body {
+                print_block(body, indent + 1);
+            }
         }
     }
 }

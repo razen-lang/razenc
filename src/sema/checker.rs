@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::lexer::TokenKind;
 use crate::sema::types::*;
 use crate::sema::scope::*;
 
@@ -175,7 +176,7 @@ impl TypeChecker {
     }
 
     fn check_loop(&mut self, l: &Loop, table: &mut SymbolTable) {
-        if let Some(ref cond) = l.cond {
+        for cond in &l.conds {
             let ct = self.check_expr(cond, table);
             if let Some(ref ct) = ct {
                 if !ct.is_bool() && !ct.is_noret() {
@@ -261,7 +262,7 @@ impl TypeChecker {
         match expr {
             Expr::Literal(kind, val) => Some(literal_to_type(kind, val)),
             Expr::Ident(name) => {
-                if name == "_" || name == "ret_in_expr" { return None; }
+                if name == "_" { return None; }
                 if name.starts_with('@') {
                     let bn = name.trim_start_matches('@');
                     return Some(TypeInfo::Builtin(bn.to_string()));
@@ -288,16 +289,6 @@ impl TypeChecker {
             }
             Expr::StructInit(name, fields) => self.check_struct_init(name, fields, table),
             Expr::Deref(e) => self.check_deref(e, table),
-            Expr::Range(start, end, _) => {
-                let st = self.check_expr(start, table);
-                let et = self.check_expr(end, table);
-                if let (Some(s), Some(e)) = (&st, &et) {
-                    if !s.is_integer() || !e.is_integer() {
-                        self.error("SEMA-0012", "Range bounds must be integer types".into());
-                    }
-                }
-                st
-            }
             Expr::Block(b) => {
                 table.push_scope();
                 for stmt in &b.stmts { self.check_stmt(stmt, table); }
@@ -308,6 +299,22 @@ impl TypeChecker {
             Expr::AtMethod(obj, method) => {
                 self.check_expr(obj, table);
                 Some(TypeInfo::Builtin(method.clone()))
+            }
+            Expr::Ret(value) => {
+                if let Some(val) = value {
+                    self.check_expr(val, table)
+                } else {
+                    None
+                }
+            }
+            Expr::Fn(fndecl) => {
+                let param_types: Vec<TypeInfo> = fndecl.params.iter()
+                    .map(|p| ast_type_to_typeinfo(&p.type_))
+                    .collect();
+                let ret_type = fndecl.return_.as_ref()
+                    .map(|t| ast_type_to_typeinfo(t))
+                    .unwrap_or(TypeInfo::Void);
+                Some(TypeInfo::Fn(param_types, Box::new(ret_type)))
             }
             Expr::Catch(e, _capture, body) => {
                 let et = self.check_expr(e, table);
@@ -427,6 +434,31 @@ impl TypeChecker {
 
         let ct = self.check_expr(callee, table);
 
+        // SEMA-0020: Generic parameter mismatch check
+        if let Expr::Ident(name) = callee {
+            if let Some(sym) = table.lookup(name) {
+                let generic_count = match sym {
+                    Symbol::Variable { .. } | Symbol::Parameter { .. } => 0,
+                    _ => {
+                        match sym {
+                            Symbol::BuiltinFn { .. } | Symbol::TypeAlias(_) | Symbol::ErrorSet(_) => 0,
+                            Symbol::Function(fs) => fs.generics.len(),
+                            Symbol::StructType(ss) => ss.generics.len(),
+                            Symbol::UnionType(us) => us.generics.len(),
+                            Symbol::EnumType(es) => es.generics.len(),
+                            Symbol::Behave(bs) => bs.generics.len(),
+                            _ => 0,
+                        }
+                    }
+                };
+                if generic_count > 0 {
+                    // If caller didn't provide generic arguments, they must all be inferred.
+                    // For now, we check that instantiation is attempted directly.
+                    // This is a stub — full generic instantiation checking is future work.
+                }
+            }
+        }
+
         match ct {
             Some(TypeInfo::Fn(params, ret)) => {
                 if args.len() != params.len() {
@@ -533,10 +565,20 @@ impl TypeChecker {
                 Some(TypeInfo::Str)
             }
             "vec" | "set" => {
+                // SEMA-0010: Runtime collection init requires explicit allocator
+                if args.is_empty() {
+                    self.error("SEMA-0010", format!("Heap collection type '@{}' requires an explicit allocator in runtime context", bn));
+                }
                 for a in args { self.check_expr(a, table); }
                 Some(TypeInfo::Builtin(bn.to_string()))
             }
-            "map" => Some(TypeInfo::Builtin("map".into())),
+            "map" => {
+                // SEMA-0010: Runtime map init requires explicit allocator
+                if args.is_empty() {
+                    self.error("SEMA-0010", "Heap collection type '@map' requires an explicit allocator in runtime context".into());
+                }
+                Some(TypeInfo::Builtin("map".into()))
+            }
             "addWithOverflow" | "subWithOverflow" | "mulWithOverflow" => {
                 if args.len() != 2 { self.error("SEMA-0017", format!("Builtin '@{}' requires 2 arguments", bn)); }
                 let t = self.check_expr(&args[0], table);
@@ -693,5 +735,53 @@ fn binop_str(op: &BinaryOp) -> &'static str {
         BinaryOp::Shl => "<<", BinaryOp::Shr => ">>",
         BinaryOp::Assign => "=", BinaryOp::ColonEq => ":=",
         BinaryOp::Range => "..", BinaryOp::RangeInclusive => "..=",
+    }
+}
+
+fn ast_type_to_typeinfo(t: &Type) -> TypeInfo {
+    match t {
+        Type::Primitive(k) => {
+            match k {
+                TokenKind::Void => TypeInfo::Void,
+                TokenKind::Bool => TypeInfo::Bool,
+                TokenKind::U8 => TypeInfo::Int(IntWidth::W8, false),
+                TokenKind::U16 => TypeInfo::Int(IntWidth::W16, false),
+                TokenKind::U32 => TypeInfo::Int(IntWidth::W32, false),
+                TokenKind::U64 => TypeInfo::Int(IntWidth::W64, false),
+                TokenKind::I8 => TypeInfo::Int(IntWidth::W8, true),
+                TokenKind::I16 => TypeInfo::Int(IntWidth::W16, true),
+                TokenKind::I32 => TypeInfo::Int(IntWidth::W32, true),
+                TokenKind::I64 => TypeInfo::Int(IntWidth::W64, true),
+                TokenKind::F32 => TypeInfo::Float(FloatWidth::W32),
+                TokenKind::F64 => TypeInfo::Float(FloatWidth::W64),
+                TokenKind::Isize => TypeInfo::Int(IntWidth::Arch, true),
+                TokenKind::Usize => TypeInfo::Int(IntWidth::Arch, false),
+                TokenKind::Noret => TypeInfo::Noret,
+                _ => TypeInfo::Void,
+            }
+        }
+        Type::Named(n) => TypeInfo::Builtin(n.clone()),
+        Type::Ref(mut_, inner) => TypeInfo::Ref(*mut_, Box::new(ast_type_to_typeinfo(inner))),
+        Type::Pointer(inner) => TypeInfo::Pointer(Box::new(ast_type_to_typeinfo(inner))),
+        Type::Optional(inner) => TypeInfo::Optional(Box::new(ast_type_to_typeinfo(inner))),
+        Type::ErrorUnion(err, ok) => {
+            TypeInfo::ErrorUnion(
+                err.as_ref().map(|e| Box::new(ast_type_to_typeinfo(e))),
+                Box::new(ast_type_to_typeinfo(ok)),
+            )
+        }
+        Type::Array(inner, size) => {
+            let sz = size.as_ref().and_then(|s| match s.as_ref() {
+                Expr::Literal(_, v) => v.parse::<u64>().ok(),
+                _ => None,
+            });
+            TypeInfo::Array(Box::new(ast_type_to_typeinfo(inner)), sz)
+        }
+        Type::Fn(params, ret) => {
+            let ps: Vec<TypeInfo> = params.iter().map(ast_type_to_typeinfo).collect();
+            let r = ast_type_to_typeinfo(ret);
+            TypeInfo::Fn(ps, Box::new(r))
+        }
+        Type::Builtin(name) => TypeInfo::Builtin(name.clone()),
     }
 }

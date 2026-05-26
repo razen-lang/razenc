@@ -457,10 +457,6 @@ impl<'a> Lexer<'a> {
             col += 1;
         }
 
-        // Append EOF token
-        let final_byte = self.source.len();
-        result.push(Token::new(TokenKind::Eof, String::new(), line, col, (final_byte, final_byte)));
-
         result
     }
 
