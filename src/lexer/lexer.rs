@@ -1,4 +1,4 @@
-use crate::lexer::token::{Token, TokenKind, LexError, TokenizationResult};
+use crate::lexer::token::{LexError, Token, TokenKind, TokenizationResult};
 
 pub struct Lexer<'a> {
     source: &'a str,
@@ -42,12 +42,22 @@ impl<'a> Lexer<'a> {
                 pos += 2;
                 col += 2;
                 while pos < len && chars[pos] != '\n' {
-                    if chars[pos] == '\t' { col += 4; } else { col += 1; }
+                    if chars[pos] == '\t' {
+                        col += 4;
+                    } else {
+                        col += 1;
+                    }
                     pos += 1;
                 }
                 let end_byte = self.byte_offset_of(pos, &chars);
                 let value: String = chars[start..pos].iter().collect();
-                result.push(Token::new(TokenKind::LineComment, value, line, start_col, (start_byte, end_byte)));
+                result.push(Token::new(
+                    TokenKind::LineComment,
+                    value,
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
                 continue;
             }
 
@@ -60,14 +70,29 @@ impl<'a> Lexer<'a> {
                 let mut depth: u32 = 1;
                 let mut unclosed = false;
                 while pos < len && depth > 0 {
-                    if chars[pos] == '\n' { line += 1; col = 1; pos += 1; continue; }
-                    else if chars[pos] == '/' && pos + 1 < len && chars[pos + 1] == '*' {
-                        depth += 1; pos += 2; col += 2; continue;
+                    if chars[pos] == '\n' {
+                        line += 1;
+                        col = 1;
+                        pos += 1;
+                        continue;
+                    } else if chars[pos] == '/' && pos + 1 < len && chars[pos + 1] == '*' {
+                        depth += 1;
+                        pos += 2;
+                        col += 2;
+                        continue;
+                    } else if chars[pos] == '*' && pos + 1 < len && chars[pos + 1] == '/' {
+                        depth -= 1;
+                        pos += 2;
+                        col += 2;
+                        continue;
+                    } else {
+                        if chars[pos] == '\t' {
+                            col += 4;
+                        } else {
+                            col += 1;
+                        }
+                        pos += 1;
                     }
-                    else if chars[pos] == '*' && pos + 1 < len && chars[pos + 1] == '/' {
-                        depth -= 1; pos += 2; col += 2; continue;
-                    }
-                    else { if chars[pos] == '\t' { col += 4; } else { col += 1; } pos += 1; }
                 }
                 if depth > 0 {
                     unclosed = true;
@@ -76,15 +101,29 @@ impl<'a> Lexer<'a> {
                 if unclosed {
                     result.error(LexError::new(
                         "Unclosed block comment".into(),
-                        line, start_col, (start_byte_bc, end_byte),
+                        line,
+                        start_col,
+                        (start_byte_bc, end_byte),
                     ));
                     // Still emit the partial comment token
                     let value: String = chars[start..pos].iter().collect();
-                    result.push(Token::new(TokenKind::BlockComment, value, line, start_col, (start_byte_bc, end_byte)));
+                    result.push(Token::new(
+                        TokenKind::BlockComment,
+                        value,
+                        line,
+                        start_col,
+                        (start_byte_bc, end_byte),
+                    ));
                     continue;
                 }
                 let value: String = chars[start..pos].iter().collect();
-                result.push(Token::new(TokenKind::BlockComment, value, line, start_col, (start_byte_bc, end_byte)));
+                result.push(Token::new(
+                    TokenKind::BlockComment,
+                    value,
+                    line,
+                    start_col,
+                    (start_byte_bc, end_byte),
+                ));
                 continue;
             }
 
@@ -92,18 +131,23 @@ impl<'a> Lexer<'a> {
             if ch == '"' {
                 let start = pos;
                 let start_byte_str = start_byte;
-                pos += 1; col += 1;
+                pos += 1;
+                col += 1;
                 let mut unclosed = true;
                 while pos < len {
                     if chars[pos] == '"' {
-                        pos += 1; col += 1;
+                        pos += 1;
+                        col += 1;
                         unclosed = false;
                         break;
                     }
-                    if chars[pos] == '\n' { line += 1; col = 1; }
-                    else if chars[pos] == '\\' && pos + 1 < len {
+                    if chars[pos] == '\n' {
+                        line += 1;
+                        col = 1;
+                    } else if chars[pos] == '\\' && pos + 1 < len {
                         let esc_start = pos;
-                        pos += 1; col += 1;
+                        pos += 1;
+                        col += 1;
                         let esc_line = line;
                         let esc_col = col;
                         match self.validate_escape(chars[pos], &chars, pos, line, col) {
@@ -114,25 +158,38 @@ impl<'a> Lexer<'a> {
                             Err(msg) => {
                                 let esc_byte = self.byte_offset_of(esc_start, &chars);
                                 result.error(LexError::new(
-                                    msg, esc_line, esc_col, (esc_byte, esc_byte + 1),
+                                    msg,
+                                    esc_line,
+                                    esc_col,
+                                    (esc_byte, esc_byte + 1),
                                 ));
                                 // Still consume the escape character to avoid infinite loop
-                                pos += 1; col += 1;
+                                pos += 1;
+                                col += 1;
                             }
                         }
                         continue;
                     }
-                    pos += 1; col += 1;
+                    pos += 1;
+                    col += 1;
                 }
                 let end_byte = self.byte_offset_of(pos, &chars);
                 if unclosed {
                     result.error(LexError::new(
                         "Unclosed string literal".into(),
-                        line, start_col, (start_byte_str, end_byte),
+                        line,
+                        start_col,
+                        (start_byte_str, end_byte),
                     ));
                 }
                 let value: String = chars[start..pos].iter().collect();
-                result.push(Token::new(TokenKind::StringValue, value, line, start_col, (start_byte_str, end_byte)));
+                result.push(Token::new(
+                    TokenKind::StringValue,
+                    value,
+                    line,
+                    start_col,
+                    (start_byte_str, end_byte),
+                ));
                 continue;
             }
 
@@ -140,18 +197,23 @@ impl<'a> Lexer<'a> {
             if ch == '\'' {
                 let start = pos;
                 let start_byte_ch = start_byte;
-                pos += 1; col += 1;
+                pos += 1;
+                col += 1;
                 let mut unclosed = true;
                 while pos < len {
                     if chars[pos] == '\'' {
-                        pos += 1; col += 1;
+                        pos += 1;
+                        col += 1;
                         unclosed = false;
                         break;
                     }
-                    if chars[pos] == '\n' { line += 1; col = 1; }
-                    else if chars[pos] == '\\' && pos + 1 < len {
+                    if chars[pos] == '\n' {
+                        line += 1;
+                        col = 1;
+                    } else if chars[pos] == '\\' && pos + 1 < len {
                         let esc_start = pos;
-                        pos += 1; col += 1;
+                        pos += 1;
+                        col += 1;
                         let esc_line = line;
                         let esc_col = col;
                         match self.validate_escape(chars[pos], &chars, pos, line, col) {
@@ -162,29 +224,43 @@ impl<'a> Lexer<'a> {
                             Err(msg) => {
                                 let esc_byte = self.byte_offset_of(esc_start, &chars);
                                 result.error(LexError::new(
-                                    msg, esc_line, esc_col, (esc_byte, esc_byte + 1),
+                                    msg,
+                                    esc_line,
+                                    esc_col,
+                                    (esc_byte, esc_byte + 1),
                                 ));
-                                pos += 1; col += 1;
+                                pos += 1;
+                                col += 1;
                             }
                         }
                         continue;
                     }
                     if pos + 1 < len && chars[pos] == '\\' && chars[pos + 1] == '\'' {
                         // escaped single quote inside char literal: \'
-                        pos += 2; col += 2;
+                        pos += 2;
+                        col += 2;
                         continue;
                     }
-                    pos += 1; col += 1;
+                    pos += 1;
+                    col += 1;
                 }
                 let end_byte = self.byte_offset_of(pos, &chars);
                 if unclosed {
                     result.error(LexError::new(
                         "Unclosed char literal".into(),
-                        line, start_col, (start_byte_ch, end_byte),
+                        line,
+                        start_col,
+                        (start_byte_ch, end_byte),
                     ));
                 }
                 let value: String = chars[start..pos].iter().collect();
-                result.push(Token::new(TokenKind::CharValue, value, line, start_col, (start_byte_ch, end_byte)));
+                result.push(Token::new(
+                    TokenKind::CharValue,
+                    value,
+                    line,
+                    start_col,
+                    (start_byte_ch, end_byte),
+                ));
                 continue;
             }
 
@@ -197,52 +273,115 @@ impl<'a> Lexer<'a> {
                 if ch == '0' && pos + 1 < len {
                     let next = chars[pos + 1];
                     if next == 'x' || next == 'X' {
-                        pos += 2; col += 2;
-                        while pos < len && (chars[pos].is_ascii_hexdigit() || chars[pos] == '_') { pos += 1; col += 1; }
+                        pos += 2;
+                        col += 2;
+                        while pos < len && (chars[pos].is_ascii_hexdigit() || chars[pos] == '_') {
+                            pos += 1;
+                            col += 1;
+                        }
                         let end_byte = self.byte_offset_of(pos, &chars);
-                        let value: String = chars[start..pos].iter().filter(|&c| c != &'_').collect();
-                        result.push(Token::new(TokenKind::IntegerValue, value, line, start_col, (start_byte_num, end_byte)));
+                        let value: String =
+                            chars[start..pos].iter().filter(|&c| c != &'_').collect();
+                        result.push(Token::new(
+                            TokenKind::IntegerValue,
+                            value,
+                            line,
+                            start_col,
+                            (start_byte_num, end_byte),
+                        ));
                         continue;
                     }
                     if next == 'b' || next == 'B' {
-                        pos += 2; col += 2;
-                        while pos < len && (chars[pos] == '0' || chars[pos] == '1' || chars[pos] == '_') { pos += 1; col += 1; }
+                        pos += 2;
+                        col += 2;
+                        while pos < len
+                            && (chars[pos] == '0' || chars[pos] == '1' || chars[pos] == '_')
+                        {
+                            pos += 1;
+                            col += 1;
+                        }
                         let end_byte = self.byte_offset_of(pos, &chars);
-                        let value: String = chars[start..pos].iter().filter(|&c| c != &'_').collect();
-                        result.push(Token::new(TokenKind::IntegerValue, value, line, start_col, (start_byte_num, end_byte)));
+                        let value: String =
+                            chars[start..pos].iter().filter(|&c| c != &'_').collect();
+                        result.push(Token::new(
+                            TokenKind::IntegerValue,
+                            value,
+                            line,
+                            start_col,
+                            (start_byte_num, end_byte),
+                        ));
                         continue;
                     }
                     if next == 'o' || next == 'O' {
-                        pos += 2; col += 2;
-                        while pos < len && ((chars[pos] >= '0' && chars[pos] <= '7') || chars[pos] == '_') { pos += 1; col += 1; }
+                        pos += 2;
+                        col += 2;
+                        while pos < len
+                            && ((chars[pos] >= '0' && chars[pos] <= '7') || chars[pos] == '_')
+                        {
+                            pos += 1;
+                            col += 1;
+                        }
                         let end_byte = self.byte_offset_of(pos, &chars);
-                        let value: String = chars[start..pos].iter().filter(|&c| c != &'_').collect();
-                        result.push(Token::new(TokenKind::IntegerValue, value, line, start_col, (start_byte_num, end_byte)));
+                        let value: String =
+                            chars[start..pos].iter().filter(|&c| c != &'_').collect();
+                        result.push(Token::new(
+                            TokenKind::IntegerValue,
+                            value,
+                            line,
+                            start_col,
+                            (start_byte_num, end_byte),
+                        ));
                         continue;
                     }
                 }
 
                 // Decimal digits (including _ separators)
-                while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') { pos += 1; col += 1; }
+                while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') {
+                    pos += 1;
+                    col += 1;
+                }
 
                 // Float: check for '.' followed by digit (not '..')
                 if pos + 1 < len && chars[pos] == '.' && chars[pos + 1].is_ascii_digit() {
-                    pos += 1; col += 1;
-                    while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') { pos += 1; col += 1; }
+                    pos += 1;
+                    col += 1;
+                    while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') {
+                        pos += 1;
+                        col += 1;
+                    }
                     if pos < len && (chars[pos] == 'e' || chars[pos] == 'E') {
-                        pos += 1; col += 1;
-                        if pos < len && (chars[pos] == '+' || chars[pos] == '-') { pos += 1; col += 1; }
-                        while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') { pos += 1; col += 1; }
+                        pos += 1;
+                        col += 1;
+                        if pos < len && (chars[pos] == '+' || chars[pos] == '-') {
+                            pos += 1;
+                            col += 1;
+                        }
+                        while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') {
+                            pos += 1;
+                            col += 1;
+                        }
                     }
                     let end_byte = self.byte_offset_of(pos, &chars);
                     let value: String = chars[start..pos].iter().filter(|&c| c != &'_').collect();
-                    result.push(Token::new(TokenKind::FloatValue, value, line, start_col, (start_byte_num, end_byte)));
+                    result.push(Token::new(
+                        TokenKind::FloatValue,
+                        value,
+                        line,
+                        start_col,
+                        (start_byte_num, end_byte),
+                    ));
                     continue;
                 }
 
                 let end_byte = self.byte_offset_of(pos, &chars);
                 let value: String = chars[start..pos].iter().filter(|&c| c != &'_').collect();
-                result.push(Token::new(TokenKind::IntegerValue, value, line, start_col, (start_byte_num, end_byte)));
+                result.push(Token::new(
+                    TokenKind::IntegerValue,
+                    value,
+                    line,
+                    start_col,
+                    (start_byte_num, end_byte),
+                ));
                 continue;
             }
 
@@ -251,16 +390,35 @@ impl<'a> Lexer<'a> {
                 let start = pos;
                 let start_byte_id = start_byte;
                 while pos < len && (chars[pos].is_ascii_alphanumeric() || chars[pos] == '_') {
-                    pos += 1; col += 1;
+                    pos += 1;
+                    col += 1;
                 }
                 let end_byte = self.byte_offset_of(pos, &chars);
                 let word: String = chars[start..pos].iter().collect();
                 if word == "_" {
-                    result.push(Token::new(TokenKind::Underscore, word, line, start_col, (start_byte_id, end_byte)));
+                    result.push(Token::new(
+                        TokenKind::Underscore,
+                        word,
+                        line,
+                        start_col,
+                        (start_byte_id, end_byte),
+                    ));
                 } else if let Some(kw) = keyword_from_str(&word) {
-                    result.push(Token::new(kw, word, line, start_col, (start_byte_id, end_byte)));
+                    result.push(Token::new(
+                        kw,
+                        word,
+                        line,
+                        start_col,
+                        (start_byte_id, end_byte),
+                    ));
                 } else {
-                    result.push(Token::new(TokenKind::Identifier, word, line, start_col, (start_byte_id, end_byte)));
+                    result.push(Token::new(
+                        TokenKind::Identifier,
+                        word,
+                        line,
+                        start_col,
+                        (start_byte_id, end_byte),
+                    ));
                 }
                 continue;
             }
@@ -270,151 +428,367 @@ impl<'a> Lexer<'a> {
             if ch == ':' {
                 if pos + 1 < len && chars[pos + 1] == '=' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::ColonEquals, ":=".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::ColonEquals,
+                        ":=".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == ':' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::ColonColon, "::".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::ColonColon,
+                        "::".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 let end_byte = self.byte_offset_of(pos + 1, &chars);
-                result.push(Token::new(TokenKind::Colon, ":".into(), line, start_col, (start_byte, end_byte)));
-                pos += 1; col += 1; continue;
+                result.push(Token::new(
+                    TokenKind::Colon,
+                    ":".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 1;
+                col += 1;
+                continue;
             }
 
             if ch == '~' && pos + 1 < len && chars[pos + 1] == '>' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::TildeArrow, "~>".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::TildeArrow,
+                    "~>".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             if ch == '-' {
                 if pos + 1 < len && chars[pos + 1] == '>' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::Arrow, "->".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::Arrow,
+                        "->".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == '=' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::MinusEquals, "-=".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::MinusEquals,
+                        "-=".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 let end_byte = self.byte_offset_of(pos + 1, &chars);
-                result.push(Token::new(TokenKind::Minus, "-".into(), line, start_col, (start_byte, end_byte)));
-                pos += 1; col += 1; continue;
+                result.push(Token::new(
+                    TokenKind::Minus,
+                    "-".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 1;
+                col += 1;
+                continue;
             }
 
             if ch == '.' {
                 if pos + 1 < len && chars[pos + 1] == '.' {
                     if pos + 2 < len && chars[pos + 2] == '=' {
                         let end_byte = self.byte_offset_of(pos + 3, &chars);
-                        result.push(Token::new(TokenKind::DotDotEquals, "..=".into(), line, start_col, (start_byte, end_byte)));
-                        pos += 3; col += 3; continue;
+                        result.push(Token::new(
+                            TokenKind::DotDotEquals,
+                            "..=".into(),
+                            line,
+                            start_col,
+                            (start_byte, end_byte),
+                        ));
+                        pos += 3;
+                        col += 3;
+                        continue;
                     }
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::DotDot, "..".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::DotDot,
+                        "..".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == '*' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::DotStar, ".*".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::DotStar,
+                        ".*".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 let end_byte = self.byte_offset_of(pos + 1, &chars);
-                result.push(Token::new(TokenKind::Dot, ".".into(), line, start_col, (start_byte, end_byte)));
-                pos += 1; col += 1; continue;
+                result.push(Token::new(
+                    TokenKind::Dot,
+                    ".".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 1;
+                col += 1;
+                continue;
             }
 
             if ch == '=' && pos + 1 < len && chars[pos + 1] == '=' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::EqualEqual, "==".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::EqualEqual,
+                    "==".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             if ch == '=' && pos + 1 < len && chars[pos + 1] == '>' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::FatArrow, "=>".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::FatArrow,
+                    "=>".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             if ch == '!' {
                 if pos + 1 < len && chars[pos + 1] == '=' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::NotEqual, "!=".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::NotEqual,
+                        "!=".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 let end_byte = self.byte_offset_of(pos + 1, &chars);
-                result.push(Token::new(TokenKind::Bang, "!".into(), line, start_col, (start_byte, end_byte)));
-                pos += 1; col += 1; continue;
+                result.push(Token::new(
+                    TokenKind::Bang,
+                    "!".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 1;
+                col += 1;
+                continue;
             }
 
             if ch == '<' {
                 if pos + 1 < len && chars[pos + 1] == '=' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::LessEqual, "<=".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::LessEqual,
+                        "<=".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == '<' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::ShiftLeft, "<<".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::ShiftLeft,
+                        "<<".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 let end_byte = self.byte_offset_of(pos + 1, &chars);
-                result.push(Token::new(TokenKind::Less, "<".into(), line, start_col, (start_byte, end_byte)));
-                pos += 1; col += 1; continue;
+                result.push(Token::new(
+                    TokenKind::Less,
+                    "<".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 1;
+                col += 1;
+                continue;
             }
 
             if ch == '>' {
                 if pos + 1 < len && chars[pos + 1] == '=' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::GreaterEqual, ">=".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::GreaterEqual,
+                        ">=".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == '>' {
                     let end_byte = self.byte_offset_of(pos + 2, &chars);
-                    result.push(Token::new(TokenKind::ShiftRight, ">>".into(), line, start_col, (start_byte, end_byte)));
-                    pos += 2; col += 2; continue;
+                    result.push(Token::new(
+                        TokenKind::ShiftRight,
+                        ">>".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 2;
+                    col += 2;
+                    continue;
                 }
                 let end_byte = self.byte_offset_of(pos + 1, &chars);
-                result.push(Token::new(TokenKind::Greater, ">".into(), line, start_col, (start_byte, end_byte)));
-                pos += 1; col += 1; continue;
+                result.push(Token::new(
+                    TokenKind::Greater,
+                    ">".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 1;
+                col += 1;
+                continue;
             }
 
             if ch == '&' && pos + 1 < len && chars[pos + 1] == '&' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::AndAnd, "&&".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::AndAnd,
+                    "&&".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             if ch == '|' && pos + 1 < len && chars[pos + 1] == '|' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::OrOr, "||".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::OrOr,
+                    "||".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             if ch == '+' && pos + 1 < len && chars[pos + 1] == '=' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::PlusEquals, "+=".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::PlusEquals,
+                    "+=".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             if ch == '*' && pos + 1 < len && chars[pos + 1] == '=' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::StarEquals, "*=".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::StarEquals,
+                    "*=".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             if ch == '/' && pos + 1 < len && chars[pos + 1] == '=' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::SlashEquals, "/=".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::SlashEquals,
+                    "/=".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             if ch == '%' && pos + 1 < len && chars[pos + 1] == '=' {
                 let end_byte = self.byte_offset_of(pos + 2, &chars);
-                result.push(Token::new(TokenKind::PercentEquals, "%=".into(), line, start_col, (start_byte, end_byte)));
-                pos += 2; col += 2; continue;
+                result.push(Token::new(
+                    TokenKind::PercentEquals,
+                    "%=".into(),
+                    line,
+                    start_col,
+                    (start_byte, end_byte),
+                ));
+                pos += 2;
+                col += 2;
+                continue;
             }
 
             // Single-character tokens
@@ -443,7 +817,9 @@ impl<'a> Lexer<'a> {
                     let end_byte = start_byte + ch.len_utf8();
                     result.error(LexError::new(
                         format!("Unexpected character '{}'", ch),
-                        line, start_col, (start_byte, end_byte),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
                     ));
                     pos += 1;
                     col += 1;
@@ -452,7 +828,13 @@ impl<'a> Lexer<'a> {
             };
             let end_byte = start_byte + ch.len_utf8();
             let value = format!("{}", ch);
-            result.push(Token::new(single, value, line, start_col, (start_byte, end_byte)));
+            result.push(Token::new(
+                single,
+                value,
+                line,
+                start_col,
+                (start_byte, end_byte),
+            ));
             pos += 1;
             col += 1;
         }
@@ -460,7 +842,14 @@ impl<'a> Lexer<'a> {
         result
     }
 
-    fn validate_escape(&self, esc: char, chars: &[char], pos: usize, _line: usize, _col: usize) -> Result<usize, String> {
+    fn validate_escape(
+        &self,
+        esc: char,
+        chars: &[char],
+        pos: usize,
+        _line: usize,
+        _col: usize,
+    ) -> Result<usize, String> {
         match esc {
             'n' | 't' | 'r' | '0' | '\\' | '"' | '\'' => Ok(0),
             'x' => {

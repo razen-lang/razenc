@@ -1,9 +1,13 @@
-use std::collections::HashMap;
 use crate::sema::types::TypeInfo;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum Symbol {
-    Variable { type_: TypeInfo, mutable: bool, is_const: bool },
+    Variable {
+        type_: TypeInfo,
+        mutable: bool,
+        is_const: bool,
+    },
     Function(FnSymbol),
     StructType(StructSymbol),
     EnumType(EnumSymbol),
@@ -11,8 +15,14 @@ pub enum Symbol {
     ErrorSet(ErrorSetSymbol),
     Behave(BehaveSymbol),
     TypeAlias(TypeInfo),
-    Parameter { type_: TypeInfo, mutable: bool },
-    BuiltinFn { name: String, param_count: (usize, Option<usize>) },
+    Parameter {
+        type_: TypeInfo,
+        mutable: bool,
+    },
+    BuiltinFn {
+        name: String,
+        param_count: (usize, Option<usize>),
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -83,7 +93,10 @@ impl Symbol {
     }
 
     pub fn is_mutable(&self) -> bool {
-        matches!(self, Symbol::Variable { mutable: true, .. } | Symbol::Parameter { mutable: true, .. })
+        matches!(
+            self,
+            Symbol::Variable { mutable: true, .. } | Symbol::Parameter { mutable: true, .. }
+        )
     }
 
     pub fn is_const(&self) -> bool {
@@ -103,7 +116,10 @@ struct Scope {
 
 impl Scope {
     fn new(parent: Option<usize>) -> Self {
-        Scope { symbols: HashMap::new(), parent }
+        Scope {
+            symbols: HashMap::new(),
+            parent,
+        }
     }
 }
 
@@ -115,7 +131,10 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     pub fn new() -> Self {
-        SymbolTable { scopes: vec![Scope::new(None)], current: 0 }
+        SymbolTable {
+            scopes: vec![Scope::new(None)],
+            current: 0,
+        }
     }
 
     pub fn push_scope(&mut self) {
@@ -132,14 +151,21 @@ impl SymbolTable {
 
     pub fn insert(&mut self, name: &str, symbol: Symbol) -> Result<(), String> {
         if self.scopes[self.current].symbols.contains_key(name) {
-            return Err(format!("Duplicate declaration: symbol '{}' is already defined in this scope", name));
+            return Err(format!(
+                "Duplicate declaration: symbol '{}' is already defined in this scope",
+                name
+            ));
         }
-        self.scopes[self.current].symbols.insert(name.to_string(), symbol);
+        self.scopes[self.current]
+            .symbols
+            .insert(name.to_string(), symbol);
         Ok(())
     }
 
     pub fn insert_overwrite(&mut self, name: &str, symbol: Symbol) {
-        self.scopes[self.current].symbols.insert(name.to_string(), symbol);
+        self.scopes[self.current]
+            .symbols
+            .insert(name.to_string(), symbol);
     }
 
     pub fn lookup(&self, name: &str) -> Option<&Symbol> {

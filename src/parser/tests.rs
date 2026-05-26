@@ -1,7 +1,7 @@
+use crate::ast::*;
 use crate::lexer::Lexer;
 use crate::lexer::token::TokenKind;
 use crate::parser::Parser;
-use crate::ast::*;
 
 fn parse(source: &str) -> Result<Program, Vec<String>> {
     let lexer = Lexer::new(source);
@@ -278,7 +278,14 @@ fn test_use_decl() {
     let p = parse_ok("use std.mem.allocator");
     match first_decl(&p) {
         Decl::Use(path) => {
-            assert_eq!(*path, vec!["std".to_string(), "mem".to_string(), "allocator".to_string()]);
+            assert_eq!(
+                *path,
+                vec![
+                    "std".to_string(),
+                    "mem".to_string(),
+                    "allocator".to_string()
+                ]
+            );
         }
         other => panic!("Expected Use, got {:?}", other),
     }
@@ -317,15 +324,13 @@ fn test_bitwise_or_without_capture() {
     // Pipe as bitwise OR — not a capture since no ident follows
     let p = parse_ok("r :: 1 | 2");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Binary(BinaryOp::BitOr, l, r) => {
-                    assert!(matches!(l.as_ref(), Expr::Literal(_, _)));
-                    assert!(matches!(r.as_ref(), Expr::Literal(_, _)));
-                }
-                other => panic!("Expected BitOr, got {:?}", other),
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Binary(BinaryOp::BitOr, l, r) => {
+                assert!(matches!(l.as_ref(), Expr::Literal(_, _)));
+                assert!(matches!(r.as_ref(), Expr::Literal(_, _)));
             }
-        }
+            other => panic!("Expected BitOr, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -334,12 +339,10 @@ fn test_bitwise_or_without_capture() {
 fn test_bitwise_and() {
     let p = parse_ok("r :: 5 & 3");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Binary(BinaryOp::BitAnd, _, _) => {}
-                other => panic!("Expected BitAnd, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Binary(BinaryOp::BitAnd, _, _) => {}
+            other => panic!("Expected BitAnd, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -348,12 +351,10 @@ fn test_bitwise_and() {
 fn test_bitwise_xor() {
     let p = parse_ok("r :: 5 ^ 3");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Binary(BinaryOp::BitXor, _, _) => {}
-                other => panic!("Expected BitXor, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Binary(BinaryOp::BitXor, _, _) => {}
+            other => panic!("Expected BitXor, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -366,7 +367,8 @@ fn test_shift_ops() {
 
 #[test]
 fn test_comparison_ops() {
-    let p = parse_ok("a :: 1 == 2\nb :: 3 != 4\nc :: 5 < 6\nd :: 7 > 8\ne :: 9 <= 10\nf :: 11 >= 12");
+    let p =
+        parse_ok("a :: 1 == 2\nb :: 3 != 4\nc :: 5 < 6\nd :: 7 > 8\ne :: 9 <= 10\nf :: 11 >= 12");
     assert_eq!(p.decls.len(), 6);
 }
 
@@ -404,15 +406,13 @@ fn test_unary_ops() {
 fn test_if_expr() {
     let p = parse_ok("r :: if true { 42 } else { 0 }");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Block(b) => {
-                    assert_eq!(b.stmts.len(), 1);
-                    assert!(matches!(b.stmts[0], Stmt::If(_)));
-                }
-                other => panic!("Expected Block, got {:?}", other),
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Block(b) => {
+                assert_eq!(b.stmts.len(), 1);
+                assert!(matches!(b.stmts[0], Stmt::If(_)));
             }
-        }
+            other => panic!("Expected Block, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -459,20 +459,18 @@ fn test_if_stmt() {
 fn test_match_expr_simple() {
     let p = parse_ok("r :: match x { 1 => \"one\", 2 => \"two\", _ => \"other\" }");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Block(b) => {
-                    assert_eq!(b.stmts.len(), 1);
-                    match &b.stmts[0] {
-                        Stmt::Match(m) => {
-                            assert_eq!(m.arms.len(), 3);
-                        }
-                        other => panic!("Expected Match, got {:?}", other),
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Block(b) => {
+                assert_eq!(b.stmts.len(), 1);
+                match &b.stmts[0] {
+                    Stmt::Match(m) => {
+                        assert_eq!(m.arms.len(), 3);
                     }
+                    other => panic!("Expected Match, got {:?}", other),
                 }
-                other => panic!("Expected Block, got {:?}", other),
             }
-        }
+            other => panic!("Expected Block, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -585,12 +583,10 @@ fn test_ret_expr() {
         Decl::Fn(f) => {
             let body = f.body.as_ref().unwrap();
             match &body.stmts[0] {
-                Stmt::Ret(Some(val)) => {
-                    match val {
-                        Expr::Literal(TokenKind::IntegerValue, v) => assert_eq!(v, "42"),
-                        other => panic!("Expected Literal(42), got {:?}", other),
-                    }
-                }
+                Stmt::Ret(Some(val)) => match val {
+                    Expr::Literal(TokenKind::IntegerValue, v) => assert_eq!(v, "42"),
+                    other => panic!("Expected Literal(42), got {:?}", other),
+                },
                 other => panic!("Expected Ret, got {:?}", other),
             }
         }
@@ -637,7 +633,9 @@ fn test_vec_type() {
         Decl::Const(c) => {
             let t = c.type_.as_ref().unwrap();
             match t {
-                Type::Builtin(name) => assert!(name.contains("vec") && name.contains("i32"), "got {}", name),
+                Type::Builtin(name) => {
+                    assert!(name.contains("vec") && name.contains("i32"), "got {}", name)
+                }
                 other => panic!("Expected Builtin(vec[i32]), got {:?}", other),
             }
         }
@@ -652,7 +650,11 @@ fn test_map_type() {
         Decl::Const(c) => {
             let t = c.type_.as_ref().unwrap();
             match t {
-                Type::Builtin(name) => assert!(name.contains("map") && name.contains("str") && name.contains("i32"), "got {}", name),
+                Type::Builtin(name) => assert!(
+                    name.contains("map") && name.contains("str") && name.contains("i32"),
+                    "got {}",
+                    name
+                ),
                 other => panic!("Expected Builtin(map{{str,i32}}), got {:?}", other),
             }
         }
@@ -667,7 +669,9 @@ fn test_set_type() {
         Decl::Const(c) => {
             let t = c.type_.as_ref().unwrap();
             match t {
-                Type::Builtin(name) => assert!(name.contains("set") && name.contains("i32"), "got {}", name),
+                Type::Builtin(name) => {
+                    assert!(name.contains("set") && name.contains("i32"), "got {}", name)
+                }
                 other => panic!("Expected Builtin(set{{i32}}), got {:?}", other),
             }
         }
@@ -700,20 +704,16 @@ fn test_if_capture() {
 fn test_match_arm_capture() {
     let p = parse_ok("r :: match x { val |cap| => cap, _ => 0 }");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Block(b) => {
-                    match &b.stmts[0] {
-                        Stmt::Match(m) => {
-                            assert_eq!(m.arms[0].capture.len(), 1);
-                            assert_eq!(m.arms[0].capture[0], "cap");
-                        }
-                        other => panic!("Expected Match, got {:?}", other),
-                    }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Block(b) => match &b.stmts[0] {
+                Stmt::Match(m) => {
+                    assert_eq!(m.arms[0].capture.len(), 1);
+                    assert_eq!(m.arms[0].capture[0], "cap");
                 }
-                other => panic!("Expected Block, got {:?}", other),
-            }
-        }
+                other => panic!("Expected Match, got {:?}", other),
+            },
+            other => panic!("Expected Block, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -768,18 +768,16 @@ fn test_complex_arithmetic() {
 fn test_field_access() {
     let p = parse_ok("r :: point.x");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Field(obj, name) => {
-                    assert_eq!(name, "x");
-                    match obj.as_ref() {
-                        Expr::Ident(n) => assert_eq!(n, "point"),
-                        other => panic!("Expected Ident, got {:?}", other),
-                    }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Field(obj, name) => {
+                assert_eq!(name, "x");
+                match obj.as_ref() {
+                    Expr::Ident(n) => assert_eq!(n, "point"),
+                    other => panic!("Expected Ident, got {:?}", other),
                 }
-                other => panic!("Expected Field, got {:?}", other),
             }
-        }
+            other => panic!("Expected Field, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -788,17 +786,13 @@ fn test_field_access() {
 fn test_index_access() {
     let p = parse_ok("r :: arr[0]");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Index(_, idx) => {
-                    match idx.as_ref() {
-                        Expr::Literal(TokenKind::IntegerValue, v) => assert_eq!(v, "0"),
-                        other => panic!("Expected Literal(0), got {:?}", other),
-                    }
-                }
-                other => panic!("Expected Index, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Index(_, idx) => match idx.as_ref() {
+                Expr::Literal(TokenKind::IntegerValue, v) => assert_eq!(v, "0"),
+                other => panic!("Expected Literal(0), got {:?}", other),
+            },
+            other => panic!("Expected Index, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -807,12 +801,10 @@ fn test_index_access() {
 fn test_slice_expr() {
     let p = parse_ok("r :: arr[0..5]");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Slice(_, _, _, _) => {}
-                other => panic!("Expected Slice, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Slice(_, _, _, _) => {}
+            other => panic!("Expected Slice, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -821,18 +813,16 @@ fn test_slice_expr() {
 fn test_call_expr() {
     let p = parse_ok("r :: add(1, 2)");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Call(callee, args) => {
-                    assert_eq!(args.len(), 2);
-                    match callee.as_ref() {
-                        Expr::Ident(n) => assert_eq!(n, "add"),
-                        other => panic!("Expected Ident, got {:?}", other),
-                    }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Call(callee, args) => {
+                assert_eq!(args.len(), 2);
+                match callee.as_ref() {
+                    Expr::Ident(n) => assert_eq!(n, "add"),
+                    other => panic!("Expected Ident, got {:?}", other),
                 }
-                other => panic!("Expected Call, got {:?}", other),
             }
-        }
+            other => panic!("Expected Call, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -844,18 +834,16 @@ fn test_call_expr() {
 fn test_at_method() {
     let p = parse_ok("r :: obj @method()");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::AtMethod(obj, method) => {
-                    assert_eq!(method, "method");
-                    match obj.as_ref() {
-                        Expr::Ident(n) => assert_eq!(n, "obj"),
-                        other => panic!("Expected Ident, got {:?}", other),
-                    }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::AtMethod(obj, method) => {
+                assert_eq!(method, "method");
+                match obj.as_ref() {
+                    Expr::Ident(n) => assert_eq!(n, "obj"),
+                    other => panic!("Expected Ident, got {:?}", other),
                 }
-                other => panic!("Expected AtMethod, got {:?}", other),
             }
-        }
+            other => panic!("Expected AtMethod, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -867,17 +855,13 @@ fn test_at_method() {
 fn test_deref() {
     let p = parse_ok("r :: ptr.*");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Deref(e) => {
-                    match e.as_ref() {
-                        Expr::Ident(n) => assert_eq!(n, "ptr"),
-                        other => panic!("Expected Ident, got {:?}", other),
-                    }
-                }
-                other => panic!("Expected Deref, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Deref(e) => match e.as_ref() {
+                Expr::Ident(n) => assert_eq!(n, "ptr"),
+                other => panic!("Expected Ident, got {:?}", other),
+            },
+            other => panic!("Expected Deref, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -889,17 +873,15 @@ fn test_deref() {
 fn test_struct_init() {
     let p = parse_ok("p :: Point{ x: 1, y: 2 }");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::StructInit(name, fields) => {
-                    assert_eq!(name, "Point");
-                    assert_eq!(fields.len(), 2);
-                    assert_eq!(fields[0].name, "x");
-                    assert_eq!(fields[1].name, "y");
-                }
-                other => panic!("Expected StructInit, got {:?}", other),
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::StructInit(name, fields) => {
+                assert_eq!(name, "Point");
+                assert_eq!(fields.len(), 2);
+                assert_eq!(fields[0].name, "x");
+                assert_eq!(fields[1].name, "y");
             }
-        }
+            other => panic!("Expected StructInit, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -911,17 +893,13 @@ fn test_struct_init() {
 fn test_paren_expr() {
     let p = parse_ok("r :: (42)");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Paren(inner) => {
-                    match inner.as_ref() {
-                        Expr::Literal(TokenKind::IntegerValue, v) => assert_eq!(v, "42"),
-                        other => panic!("Expected Literal(42), got {:?}", other),
-                    }
-                }
-                other => panic!("Expected Paren, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Paren(inner) => match inner.as_ref() {
+                Expr::Literal(TokenKind::IntegerValue, v) => assert_eq!(v, "42"),
+                other => panic!("Expected Literal(42), got {:?}", other),
+            },
+            other => panic!("Expected Paren, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -994,12 +972,10 @@ fn test_optional_type() {
         Decl::Const(c) => {
             let t = c.type_.as_ref().unwrap();
             match t {
-                Type::Optional(inner) => {
-                    match inner.as_ref() {
-                        Type::Primitive(TokenKind::I32) => {}
-                        other => panic!("Expected I32, got {:?}", other),
-                    }
-                }
+                Type::Optional(inner) => match inner.as_ref() {
+                    Type::Primitive(TokenKind::I32) => {}
+                    other => panic!("Expected I32, got {:?}", other),
+                },
                 other => panic!("Expected Optional, got {:?}", other),
             }
         }
@@ -1054,7 +1030,9 @@ fn test_nested_blocks() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_struct_with_methods() {
-    let p = parse_ok("Vec2 :: struct { x: f32, y: f32, pub length :: fn(self: &Vec2) -> f32 { ret 0.0 } }");
+    let p = parse_ok(
+        "Vec2 :: struct { x: f32, y: f32, pub length :: fn(self: &Vec2) -> f32 { ret 0.0 } }",
+    );
     match &p.decls[0] {
         Decl::Struct(s) => {
             assert_eq!(s.fields.len(), 2);
@@ -1121,13 +1099,15 @@ fn test_comptime_builtins() {
 // ---------------------------------------------------------------------------
 #[test]
 fn test_multi_decl() {
-    let p = parse_ok("
+    let p = parse_ok(
+        "
         use std.mem
         PI :: 3.14
         main :: fn() -> void {
             loop { }
         }
-    ");
+    ",
+    );
     assert!(p.decls.len() >= 3);
 }
 
@@ -1139,12 +1119,10 @@ fn test_pipe_as_binary_not_capture() {
     // Pipe with identifier on both sides = binary OR, not capture
     let p = parse_ok("r :: flags_a | flags_b");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Binary(BinaryOp::BitOr, _, _) => {}
-                other => panic!("Expected BitOr, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Binary(BinaryOp::BitOr, _, _) => {}
+            other => panic!("Expected BitOr, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -1253,12 +1231,10 @@ fn test_mut_param() {
 fn test_dotdot_equals_range() {
     let p = parse_ok("r :: 0..=10");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Binary(BinaryOp::RangeInclusive, _, _) => {}
-                other => panic!("Expected RangeInclusive, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Binary(BinaryOp::RangeInclusive, _, _) => {}
+            other => panic!("Expected RangeInclusive, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }
@@ -1267,12 +1243,10 @@ fn test_dotdot_equals_range() {
 fn test_optional_chaining() {
     let p = parse_ok("r :: ?x");
     match &p.decls[0] {
-        Decl::Const(c) => {
-            match c.value.as_ref().unwrap() {
-                Expr::Unary(UnaryOp::Optional, _) => {}
-                other => panic!("Expected Optional unary, got {:?}", other),
-            }
-        }
+        Decl::Const(c) => match c.value.as_ref().unwrap() {
+            Expr::Unary(UnaryOp::Optional, _) => {}
+            other => panic!("Expected Optional unary, got {:?}", other),
+        },
         other => panic!("Expected Const, got {:?}", other),
     }
 }

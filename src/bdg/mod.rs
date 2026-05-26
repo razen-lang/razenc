@@ -133,7 +133,9 @@ fn kind_color(kind: &TokenKind) -> &'static str {
         | TokenKind::QuestionMark => YELLOW,
 
         // Arrows => yellow
-        TokenKind::Arrow | TokenKind::FatArrow | TokenKind::TildeArrow | TokenKind::ColonColon => YELLOW,
+        TokenKind::Arrow | TokenKind::FatArrow | TokenKind::TildeArrow | TokenKind::ColonColon => {
+            YELLOW
+        }
 
         // Access / separators => grey
         TokenKind::Dot
@@ -221,8 +223,16 @@ pub fn print_tokens(tokens: &[Token]) {
         println!(
             "  {g}[{i:>3}]{r}  {g}Type:{r} {c}{k}{r}  \
              {g}Value:{r} {o}{v}{r}  {g}Line:{r} {l}  {g}Span:{r} {sp}:{ep}",
-            g = GREY, r = RST, i = i, c = c, k = kind_str,
-            o = ORNG, v = value_str, l = line, sp = span.0, ep = span.1,
+            g = GREY,
+            r = RST,
+            i = i,
+            c = c,
+            k = kind_str,
+            o = ORNG,
+            v = value_str,
+            l = line,
+            sp = span.0,
+            ep = span.1,
         );
     }
 }
@@ -268,7 +278,16 @@ fn print_decl(decl: &Decl, indent: usize) {
                 println!("{}  {}pub{}", i, GREEN, RST);
             }
             for p in &f.params {
-                println!("{}  {}Param{} {}{} {}{}", i, YELLOW, RST, PEACH, p.name, CYAN, type_str(&p.type_));
+                println!(
+                    "{}  {}Param{} {}{} {}{}",
+                    i,
+                    YELLOW,
+                    RST,
+                    PEACH,
+                    p.name,
+                    CYAN,
+                    type_str(&p.type_)
+                );
             }
             if let Some(ref rt) = f.return_ {
                 println!("{}  {}Return{} {}{}", i, YELLOW, RST, CYAN, type_str(rt));
@@ -287,12 +306,30 @@ fn print_decl(decl: &Decl, indent: usize) {
                 println!("{}  {}Implements{} {}{}", i, YELLOW, RST, PEACH, ib);
             }
             for f in &s.fields {
-                println!("{}  {}Field{} {}{} {}{}", i, YELLOW, RST, PEACH, f.name, CYAN, type_str(&f.type_));
+                println!(
+                    "{}  {}Field{} {}{} {}{}",
+                    i,
+                    YELLOW,
+                    RST,
+                    PEACH,
+                    f.name,
+                    CYAN,
+                    type_str(&f.type_)
+                );
             }
             for m in &s.methods {
                 println!("{}  {}Method{} {}{}", i, MAGENTA, RST, PEACH, m.name);
                 for p in &m.params {
-                    println!("{}    {}Param{} {}{} {}{}", i, YELLOW, RST, PEACH, p.name, CYAN, type_str(&p.type_));
+                    println!(
+                        "{}    {}Param{} {}{} {}{}",
+                        i,
+                        YELLOW,
+                        RST,
+                        PEACH,
+                        p.name,
+                        CYAN,
+                        type_str(&p.type_)
+                    );
                 }
                 if let Some(ref rt) = m.return_ {
                     println!("{}    {}Return{} {}{}", i, YELLOW, RST, CYAN, type_str(rt));
@@ -306,14 +343,32 @@ fn print_decl(decl: &Decl, indent: usize) {
         Decl::Union(u) => {
             println!("{}{}Union{} {}{}", i, GREEN, RST, PEACH, u.name);
             for v in &u.variants {
-                println!("{}  {}Variant{} {}{} {}{}", i, YELLOW, RST, PEACH, v.name, CYAN, type_str(&v.type_));
+                println!(
+                    "{}  {}Variant{} {}{} {}{}",
+                    i,
+                    YELLOW,
+                    RST,
+                    PEACH,
+                    v.name,
+                    CYAN,
+                    type_str(&v.type_)
+                );
             }
         }
         Decl::Enum(e) => {
             println!("{}{}Enum{} {}{}", i, GREEN, RST, PEACH, e.name);
             for v in &e.variants {
                 if let Some(ref t) = v.type_ {
-                    println!("{}  {}Variant{} {}{} {}{}", i, YELLOW, RST, PEACH, v.name, CYAN, type_str(t));
+                    println!(
+                        "{}  {}Variant{} {}{} {}{}",
+                        i,
+                        YELLOW,
+                        RST,
+                        PEACH,
+                        v.name,
+                        CYAN,
+                        type_str(t)
+                    );
                 } else {
                     println!("{}  {}Variant{} {}{}", i, YELLOW, RST, PEACH, v.name);
                 }
@@ -330,7 +385,16 @@ fn print_decl(decl: &Decl, indent: usize) {
             for m in &b.methods {
                 println!("{}  {}Method{} {}{}", i, MAGENTA, RST, PEACH, m.name);
                 for p in &m.params {
-                    println!("{}    {}Param{} {}{} {}{}", i, YELLOW, RST, PEACH, p.name, CYAN, type_str(&p.type_));
+                    println!(
+                        "{}    {}Param{} {}{} {}{}",
+                        i,
+                        YELLOW,
+                        RST,
+                        PEACH,
+                        p.name,
+                        CYAN,
+                        type_str(&p.type_)
+                    );
                 }
                 if let Some(ref rt) = m.return_ {
                     println!("{}    {}Return{} {}{}", i, YELLOW, RST, CYAN, type_str(rt));
@@ -340,7 +404,17 @@ fn print_decl(decl: &Decl, indent: usize) {
         Decl::Var(v) => {
             let kind = if v.mutable { "mut" } else { "let" };
             if let Some(ref t) = v.type_ {
-                println!("{}{}{}{} {}{} {}{} =", i, YELLOW, kind, RST, PEACH, v.name, CYAN, type_str(t));
+                println!(
+                    "{}{}{}{} {}{} {}{} =",
+                    i,
+                    YELLOW,
+                    kind,
+                    RST,
+                    PEACH,
+                    v.name,
+                    CYAN,
+                    type_str(t)
+                );
             } else {
                 println!("{}{}{}{} {}{} :=", i, YELLOW, kind, RST, PEACH, v.name);
             }
@@ -350,7 +424,16 @@ fn print_decl(decl: &Decl, indent: usize) {
         }
         Decl::Const(c) => {
             if let Some(ref t) = c.type_ {
-                println!("{}{}Const{} {}{} {}{} ::", i, GREEN, RST, PEACH, c.name, CYAN, type_str(t));
+                println!(
+                    "{}{}Const{} {}{} {}{} ::",
+                    i,
+                    GREEN,
+                    RST,
+                    PEACH,
+                    c.name,
+                    CYAN,
+                    type_str(t)
+                );
             } else {
                 println!("{}{}Const{} {}{} ::", i, GREEN, RST, PEACH, c.name);
             }
@@ -359,7 +442,16 @@ fn print_decl(decl: &Decl, indent: usize) {
             }
         }
         Decl::TypeAlias(name, t) => {
-            println!("{}{}TypeAlias{} {}{} = {}{}", i, GREEN, RST, PEACH, name, CYAN, type_str(t));
+            println!(
+                "{}{}TypeAlias{} {}{} = {}{}",
+                i,
+                GREEN,
+                RST,
+                PEACH,
+                name,
+                CYAN,
+                type_str(t)
+            );
         }
         Decl::Test(name, block) => {
             println!("{}{}Test{} {}{}", i, GREEN, RST, PEACH, name);
@@ -386,7 +478,17 @@ fn print_stmt(stmt: &Stmt, indent: usize) {
         Stmt::Var(v) => {
             let kind = if v.mutable { "mut" } else { "let" };
             if let Some(ref t) = v.type_ {
-                println!("{}{}{}{} {}{} {}{} =", i, YELLOW, kind, RST, PEACH, v.name, CYAN, type_str(t));
+                println!(
+                    "{}{}{}{} {}{} {}{} =",
+                    i,
+                    YELLOW,
+                    kind,
+                    RST,
+                    PEACH,
+                    v.name,
+                    CYAN,
+                    type_str(t)
+                );
             } else {
                 println!("{}{}{}{} {}{} :=", i, YELLOW, kind, RST, PEACH, v.name);
             }
@@ -394,15 +496,13 @@ fn print_stmt(stmt: &Stmt, indent: usize) {
                 print_expr(val, indent + 1);
             }
         }
-        Stmt::Ret(e) => {
-            match e {
-                Some(ex) => {
-                    println!("{}{}ret{}", i, MAGENTA, RST);
-                    print_expr(ex, indent + 1);
-                }
-                None => println!("{}{}ret{}", i, MAGENTA, RST),
+        Stmt::Ret(e) => match e {
+            Some(ex) => {
+                println!("{}{}ret{}", i, MAGENTA, RST);
+                print_expr(ex, indent + 1);
             }
-        }
+            None => println!("{}{}ret{}", i, MAGENTA, RST),
+        },
         Stmt::Stop => println!("{}{}stop{}", i, MAGENTA, RST),
         Stmt::Next => println!("{}{}next{}", i, MAGENTA, RST),
         Stmt::If(if_) => {
@@ -439,7 +539,13 @@ fn print_stmt(stmt: &Stmt, indent: usize) {
                 print_expr(c, indent + 1);
             }
             if !l.captures.is_empty() {
-                println!("{}  {}captures{} {:?}", i, YELLOW, RST, l.captures.iter().map(|c| &c.name).collect::<Vec<_>>());
+                println!(
+                    "{}  {}captures{} {:?}",
+                    i,
+                    YELLOW,
+                    RST,
+                    l.captures.iter().map(|c| &c.name).collect::<Vec<_>>()
+                );
             }
             print_block(&l.body, indent);
         }
@@ -484,7 +590,15 @@ fn print_expr(expr: &Expr, indent: usize) {
     let i = "  ".repeat(indent);
     match expr {
         Expr::Literal(kind, val) => {
-            println!("{}{}Literal{} {}{} '{}'", i, ORNG, RST, GREY, kind_display(kind), val);
+            println!(
+                "{}{}Literal{} {}{} '{}'",
+                i,
+                ORNG,
+                RST,
+                GREY,
+                kind_display(kind),
+                val
+            );
         }
         Expr::Ident(name) => {
             println!("{}{}Ident{} {}", i, PEACH, RST, name);
@@ -557,7 +671,15 @@ fn print_expr(expr: &Expr, indent: usize) {
         Expr::Fn(fndecl) => {
             println!("{}{}Fn{} {}", i, CYAN, RST, fndecl.name);
             for p in &fndecl.params {
-                println!("{}  {}{}Param{} {}: {}", i, YELLOW, if p.mutable { "mut " } else { "" }, RST, p.name, type_str(&p.type_));
+                println!(
+                    "{}  {}{}Param{} {}: {}",
+                    i,
+                    YELLOW,
+                    if p.mutable { "mut " } else { "" },
+                    RST,
+                    p.name,
+                    type_str(&p.type_)
+                );
             }
             if let Some(ret) = &fndecl.return_ {
                 println!("{}  {}Return{} {}", i, YELLOW, RST, type_str(ret));

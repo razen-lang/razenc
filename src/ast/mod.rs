@@ -147,25 +147,55 @@ pub enum Expr {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinaryOp {
-    Add, Sub, Mul, Div, Mod,
-    AddAssign, SubAssign, MulAssign, DivAssign, ModAssign,
-    Eq, Ne, Lt, Gt, Le, Ge,
-    And, Or,
-    BitAnd, BitOr, BitXor,
-    Shl, Shr,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    AddAssign,
+    SubAssign,
+    MulAssign,
+    DivAssign,
+    ModAssign,
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    And,
+    Or,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
     Assign,
     ColonEq,
-    Range, RangeInclusive,
+    Range,
+    RangeInclusive,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnaryOp {
-    Neg, Not, BitNot, Ref, RefMut, Optional, Deref,
+    Neg,
+    Not,
+    BitNot,
+    Ref,
+    RefMut,
+    Optional,
+    Deref,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AssignOp {
-    Eq, AddEq, SubEq, MulEq, DivEq, ModEq, ColonEq,
+    Eq,
+    AddEq,
+    SubEq,
+    MulEq,
+    DivEq,
+    ModEq,
+    ColonEq,
 }
 
 #[derive(Debug, Clone)]

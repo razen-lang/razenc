@@ -5,56 +5,147 @@ pub type Span = (usize, usize);
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // Control Flow
-    If, Else, Match, Loop, Stop, Next, Ret,
+    If,
+    Else,
+    Match,
+    Loop,
+    Stop,
+    Next,
+    Ret,
 
     // Memory & Error
-    Mut, Try, Catch, Defer,
+    Mut,
+    Try,
+    Catch,
+    Defer,
 
     // Modules & Visibility
-    Mod, Use, Pub, Ext,
+    Mod,
+    Use,
+    Pub,
+    Ext,
 
     // Definitions
-    Fn, Struct, Union, Enum, ErrorKw, Behave, Type, Test,
+    Fn,
+    Struct,
+    Union,
+    Enum,
+    ErrorKw,
+    Behave,
+    Type,
+    Test,
 
     // Literals
-    True, False, Nil,
+    True,
+    False,
+    Nil,
 
     // Type Keywords
-    Void, Bool, Char, Str, Noret, AnyType,
-    Int, Uint, Float, Isize, Usize,
-    I1, I2, I4, I8, I16, I32, I64, I128,
-    U1, U2, U4, U8, U16, U32, U64, U128,
-    F8, F16, F32, F64, F128,
+    Void,
+    Bool,
+    Char,
+    Str,
+    Noret,
+    AnyType,
+    Int,
+    Uint,
+    Float,
+    Isize,
+    Usize,
+    I1,
+    I2,
+    I4,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    U1,
+    U2,
+    U4,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    F8,
+    F16,
+    F32,
+    F64,
+    F128,
 
     // Arithmetic
-    Plus, Minus, Star, Slash, Percent,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
 
     // Compound Assignment
-    PlusEquals, MinusEquals, StarEquals, SlashEquals, PercentEquals,
+    PlusEquals,
+    MinusEquals,
+    StarEquals,
+    SlashEquals,
+    PercentEquals,
 
     // Comparison
-    EqualEqual, NotEqual, Less, Greater, LessEqual, GreaterEqual,
+    EqualEqual,
+    NotEqual,
+    Less,
+    Greater,
+    LessEqual,
+    GreaterEqual,
 
     // Logical
-    AndAnd, OrOr, Bang,
+    AndAnd,
+    OrOr,
+    Bang,
 
     // Bitwise
-    And, Or, Caret, Tilde, ShiftLeft, ShiftRight,
+    And,
+    Or,
+    Caret,
+    Tilde,
+    ShiftLeft,
+    ShiftRight,
 
     // Sigils & Special
-    ColonEquals, ColonColon, TildeArrow, Arrow, FatArrow, At,
-    Dot, DotDot, DotDotEquals, DotStar,
-    Colon, Comma, Semicolon, Assign, Underscore, Pipe,
+    ColonEquals,
+    ColonColon,
+    TildeArrow,
+    Arrow,
+    FatArrow,
+    At,
+    Dot,
+    DotDot,
+    DotDotEquals,
+    DotStar,
+    Colon,
+    Comma,
+    Semicolon,
+    Assign,
+    Underscore,
+    Pipe,
     QuestionMark,
 
     // Grouping
-    LeftParen, RightParen, LeftBrace, RightBrace, LeftBracket, RightBracket,
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    LeftBracket,
+    RightBracket,
 
     // Values
-    Identifier, IntegerValue, FloatValue, StringValue, CharValue,
+    Identifier,
+    IntegerValue,
+    FloatValue,
+    StringValue,
+    CharValue,
 
     // Comments
-    LineComment, BlockComment,
+    LineComment,
+    BlockComment,
 
     // End of file
     Eof,
@@ -78,7 +169,13 @@ pub struct Token {
 
 impl Token {
     pub fn new(kind: TokenKind, value: String, line: usize, col: usize, span: Span) -> Self {
-        Token { kind, value, line, col, span }
+        Token {
+            kind,
+            value,
+            line,
+            col,
+            span,
+        }
     }
 }
 
@@ -92,7 +189,12 @@ pub struct LexError {
 
 impl LexError {
     pub fn new(message: String, line: usize, col: usize, span: Span) -> Self {
-        LexError { message, line, col, span }
+        LexError {
+            message,
+            line,
+            col,
+            span,
+        }
     }
 }
 
@@ -104,7 +206,10 @@ pub struct TokenizationResult {
 
 impl TokenizationResult {
     pub fn new() -> Self {
-        TokenizationResult { tokens: Vec::new(), errors: Vec::new() }
+        TokenizationResult {
+            tokens: Vec::new(),
+            errors: Vec::new(),
+        }
     }
 
     pub fn push(&mut self, token: Token) {

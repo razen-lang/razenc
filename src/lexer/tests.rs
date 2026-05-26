@@ -32,7 +32,11 @@ fn count_kind(result: &TokenizationResult, kind: TokenKind) -> usize {
 #[test]
 fn test_empty_source() {
     let r = tokenize("");
-    assert!(r.tokens.is_empty(), "expected no tokens, got {}", r.tokens.len());
+    assert!(
+        r.tokens.is_empty(),
+        "expected no tokens, got {}",
+        r.tokens.len()
+    );
     assert!(r.errors.is_empty());
 }
 
@@ -42,7 +46,11 @@ fn test_empty_source() {
 #[test]
 fn test_whitespace_only() {
     let r = tokenize("   \t\n  \r\n  ");
-    assert!(r.tokens.is_empty(), "expected no tokens, got {}", r.tokens.len());
+    assert!(
+        r.tokens.is_empty(),
+        "expected no tokens, got {}",
+        r.tokens.len()
+    );
     assert!(r.errors.is_empty());
 }
 
@@ -629,9 +637,12 @@ fn test_line_col_tracking() {
     let a = &r.tokens[0];
     let b = &r.tokens[1];
     let c = &r.tokens[2];
-    assert_eq!(a.line, 1); assert_eq!(a.col, 1);
-    assert_eq!(b.line, 2); assert_eq!(b.col, 1);
-    assert_eq!(c.line, 3); assert_eq!(c.col, 1);
+    assert_eq!(a.line, 1);
+    assert_eq!(a.col, 1);
+    assert_eq!(b.line, 2);
+    assert_eq!(b.col, 1);
+    assert_eq!(c.line, 3);
+    assert_eq!(c.col, 1);
     assert!(r.errors.is_empty());
 }
 
@@ -682,7 +693,11 @@ fn test_multiple_unknown_characters() {
     // `@#$ — only ` is truly unknown; @ and # are...
     // Actually @ is a valid token. # and $ are unknown.
     let unknown_count = r.errors.len();
-    assert!(unknown_count >= 1, "expected at least 1 unknown char error, got {}", unknown_count);
+    assert!(
+        unknown_count >= 1,
+        "expected at least 1 unknown char error, got {}",
+        unknown_count
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -747,9 +762,17 @@ fn test_eof_token_always_present() {
         let r = tokenize(src);
         // Non-empty sources should have at least one real token
         if !src.trim().is_empty() {
-            assert!(!r.tokens.is_empty(), "source {:?} should produce tokens", src);
+            assert!(
+                !r.tokens.is_empty(),
+                "source {:?} should produce tokens",
+                src
+            );
         } else {
-            assert!(r.tokens.is_empty(), "source {:?} should produce no tokens", src);
+            assert!(
+                r.tokens.is_empty(),
+                "source {:?} should produce no tokens",
+                src
+            );
         }
     }
 }
@@ -799,8 +822,7 @@ fn test_string_backslash_at_end() {
     let r = tokenize("\"hello\\");
     // The backslash at end is followed by nothing, so the escape
     // validation can't run; the string just ends.
-    assert!(has_error_containing(&r, "Unclosed string")
-        || has_error_containing(&r, "escape"));
+    assert!(has_error_containing(&r, "Unclosed string") || has_error_containing(&r, "escape"));
 }
 
 // ---------------------------------------------------------------------------
@@ -842,8 +864,14 @@ fn test_tab_in_string() {
 fn test_keywords_not_identifiers() {
     let r = tokenize("fn if else struct");
     for token in &r.tokens {
-        if token.kind == TokenKind::Eof { continue; }
-        assert_ne!(token.kind, TokenKind::Identifier, "keyword tokenized as identifier");
+        if token.kind == TokenKind::Eof {
+            continue;
+        }
+        assert_ne!(
+            token.kind,
+            TokenKind::Identifier,
+            "keyword tokenized as identifier"
+        );
     }
     assert!(r.errors.is_empty());
 }
