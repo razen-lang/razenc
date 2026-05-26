@@ -58,19 +58,43 @@ fn process_file(file_path: &PathBuf, verbose: bool) {
     }
 
     let mut parser = crate::parser::Parser::new(tokens);
-    match parser.parse() {
+    let program = match parser.parse() {
         Ok(program) => {
             if verbose {
                 crate::bdg::print_phase2_header("Done");
                 crate::bdg::print_ast(&program);
                 crate::bdg::print_footer("Parser\t\tDone");
             }
+            Some(program)
         }
         Err(errors) => {
             for err in &errors {
                 crate::bdg::print_error(err);
             }
-            std::process::exit(1);
+            None
         }
+    };
+
+    if let Some(ref program) = program {
+        if verbose {
+            crate::bdg::print_phase3_header("Running");
+        }
+
+        let mut sema = crate::sema::SemanticAnalyzer::new();
+        match sema.analyze(program) {
+            Ok(_) => {
+                if verbose {
+                    crate::bdg::print_footer("Semantic Analysis\tDone");
+                }
+            }
+            Err(errors) => {
+                for err in &errors {
+                    crate::bdg::print_error(&format!("[{}] {}", err.code, err.message));
+                }
+                std::process::exit(1);
+            }
+        }
+    } else {
+        std::process::exit(1);
     }
 }

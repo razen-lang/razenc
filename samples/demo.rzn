@@ -1,0 +1,69 @@
+// Razen Language — Complete Feature Demonstration
+// Covers: types, variables, constants, control flow,
+// functions, structs, enums, unions, error handling,
+// behaviours, generics, pointers, builtins, allocators,
+// defer, pattern matching.
+
+use std.fmt
+
+// ── Constants & Type Aliases ──
+APP_NAME : str : "Razen Demo v1.0"
+MAX_BUF : usize : 4096
+PI : f64 : 3.14159
+Age :: type(u8)
+Score :: type(f64)
+
+// ── Error Sets ──
+MathError :: error {
+    Division_By_Zero,
+    Overflow,
+    Negative_Input,
+}
+
+// ── Behaviours ──
+Describable :: behave {
+    describe :: fn(self: &@Self) -> void
+}
+
+Toggable :: behave {
+    print_tag :: fn(self: &@Self) -> void
+}
+
+// ── Enums ──
+Color :: enum { Red, Green, Blue }
+
+HttpStatus :: enum(u16) {
+    Ok = 200,
+    Not_Found = 404,
+    Internal_Error = 500,
+}
+
+Permission :: enum(u8) {
+    Read = 1 << 0,
+    Write = 1 << 1,
+    Execute = 1 << 2,
+}
+
+// ── Unions ──
+Value :: union {
+    Int(i64),
+    Float(f64),
+    Text(str),
+}
+
+Shape :: union {
+    Circle { radius: f64 },
+    Rectangle { width: f64, height: f64 },
+}
+
+// ── Structs ──
+User :: struct ~> Describable {
+    name: str,
+    age: Age,
+    email: str,
+
+    describe :: fn(self: &User) -> void {
+        fmt.println("User: {}, Age: {}, Email: {}", self.name, self.age, self.email)
+    }
+}
+

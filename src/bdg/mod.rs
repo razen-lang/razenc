@@ -191,6 +191,13 @@ pub fn print_phase2_header(status: &str) {
     );
 }
 
+pub fn print_phase3_header(status: &str) {
+    println!(
+        "{}Phase {}  {}{}\t\t{}{}{}",
+        MAGENTA, "3", RST, "Semantic Analysis", GREEN, status, RST
+    );
+}
+
 pub fn print_token_count(count: usize) {
     println!();
     println!("{}Tokens{} ({})", CYAN, RST, count);
