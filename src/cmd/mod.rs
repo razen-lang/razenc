@@ -103,6 +103,19 @@ fn process_file(file_path: &PathBuf, verbose: bool) {
                 std::process::exit(1);
             }
         }
+
+        // Phase 4: IR Generation
+        if verbose {
+            crate::bdg::print_phase4_header("Running");
+        }
+
+        let mut ir_gen = crate::ir::IrGenerator::new();
+        let ir_program = ir_gen.generate(program);
+
+        if verbose {
+            crate::bdg::print_ir(&ir_program);
+            crate::bdg::print_footer("IR Generation\t\tDone");
+        }
     } else {
         std::process::exit(1);
     }

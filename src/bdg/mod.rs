@@ -237,6 +237,60 @@ pub fn print_tokens(tokens: &[Token]) {
     }
 }
 
+pub fn print_phase4_header(status: &str) {
+    println!(
+        "{}Phase {}  {}{}\t\t{}{}{}",
+        MAGENTA, "4", RST, "IR Generation", GREEN, status, RST
+    );
+}
+
+pub fn print_ir(ir_program: &crate::ir::IrProgram) {
+    println!();
+    println!("{}━━━ Generated IR ━━━{}", BLUE, RST);
+
+    for func in &ir_program.functions {
+        println!();
+        println!("{}{}Function:{} {}{}", BOLD, LGREEN, RST, PEACH, func.name);
+        if !func.params.is_empty() {
+            let params: Vec<String> = func
+                .params
+                .iter()
+                .map(|(n, t)| format!("{}{}{}{}", PEACH, n, CYAN, crate::bdg::type_str(t)))
+                .collect();
+            println!("  {}params{}: {}", GREY, RST, params.join(", "));
+        }
+        if let Some(ref rt) = func.return_type {
+            println!("  {}return{}: {}{}", GREY, RST, CYAN, crate::bdg::type_str(rt));
+        }
+        println!();
+
+        for inst in &func.insts {
+            match inst {
+                crate::ir::IrInst::Comment(msg) => {
+                    println!("  {}{}{}{}", GREY, "; ", msg, RST);
+                }
+                crate::ir::IrInst::Label(label) => {
+                    println!("{}{}:{}", YELLOW, label, RST);
+                }
+                inst => {
+                    println!("  {}  {}{}", GREY, RST, inst);
+                }
+            }
+        }
+    }
+
+    if !ir_program.globals.is_empty() {
+        println!();
+        println!("{}{}Globals:{}", BOLD, GREEN, RST);
+        for g in &ir_program.globals {
+            let init_str = g.init.as_ref().map(|v| format!(" = {}", v)).unwrap_or_default();
+            println!("  {}{}{}{}", CYAN, g.name, RST, init_str);
+        }
+    }
+
+    println!();
+}
+
 pub fn print_footer(status: &str) {
     println!();
     println!("\t\t{}{}{}", GREEN, status, RST);
