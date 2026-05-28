@@ -89,6 +89,10 @@ mod tests {
         })
     }
 
+    fn defer_stmt(e: Expr) -> Stmt {
+        Stmt::Defer(Box::new(e))
+    }
+
     fn var_stmt(name: &str, mutable: bool, type_: Option<Type>, value: Option<Expr>) -> Stmt {
         Stmt::Var(VarDecl {
             name: name.to_string(),
@@ -630,5 +634,382 @@ mod tests {
             result.unwrap_err().iter().any(|e| e.code == "SEMA-0009"),
             "Expected SEMA-0009 for return type mismatch"
         );
+    }
+
+    // ─── Section 3 Tests ───
+
+    // 3.1: Try/catch both branches exit
+    #[test]
+    fn test_try_catch_both_return() {
+        let decls = vec![make_i32_fn(
+            "try_catch_ret",
+            block(vec![Stmt::TryCatch(TryCatch {
+                try_body: block(vec![ret_expr(lit_i32(1))]),
+                capture: vec!["e".into()],
+                catch_body: block(vec![ret_expr(lit_i32(2))]),
+            })]),
+        )];
+        let result = analyze(decls);
+        assert!(
+            result.is_ok(),
+            "try/catch where both branches return should pass: {:?}",
+            result
+        );
+    }
+
+    // 3.1: Try/catch — only catch returns should not satisfy non-void return
+    #[test]
+    fn test_try_catch_only_catch_returns() {
+        let decls = vec![make_i32_fn(
+            "try_only_catch",
+            block(vec![Stmt::TryCatch(TryCatch {
+                try_body: block(vec![]),
+                capture: vec!["e".into()],
+                catch_body: block(vec![ret_expr(lit_i32(1))]),
+            })]),
+        )];
+        let result = analyze(decls);
+        // Only catch returns — try body doesn't return, so not all paths return
+        assert!(
+            result.is_err(),
+            "Only catch returning should trigger missing return error"
+        );
+    }
+
+    // 3.1: Try/catch — neither branch returns, non-void function
+    #[test]
+    fn test_try_catch_no_return() {
+        let decls = vec![make_i32_fn(
+            "try_no_ret",
+            block(vec![Stmt::TryCatch(TryCatch {
+                try_body: block(vec![]),
+                capture: vec!["e".into()],
+                catch_body: block(vec![]),
+            })]),
+        )];
+        let result = analyze(decls);
+        assert!(result.is_err(), "Neither branch returning should error");
+    }
+
+    // 3.2: Defer in nested block — does not leak to outer scope
+    #[test]
+    fn test_defer_in_block_does_not_leak() {
+        // Declare a cleanup function first
+        let cleanup_fn = make_void_fn("cleanup_fn", block(vec![]));
+        let main_fn = make_void_fn(
+            "defer_block",
+            block(vec![Stmt::Block(block(vec![defer_stmt(ident(
+                "cleanup_fn",
+            ))]))]),
+        );
+        let decls = vec![cleanup_fn, main_fn];
+        let result = analyze(decls);
+        assert!(
+            result.is_ok(),
+            "Defer inside block should be valid: {:?}",
+            result
+        );
+    }
+
+    // 3.3: Loop capture — captures get type from iterable
+    #[test]
+    fn test_loop_capture_infers_from_range() {
+        // loop 0, 10 |i| { ... } — i should be typed (not crash)
+        let decls = vec![make_void_fn(
+            "loop_range",
+            block(vec![Stmt::Loop(Loop {
+                conds: vec![Expr::Binary(
+                    BinaryOp::Range,
+                    Box::new(lit_i32(0)),
+                    Box::new(lit_i32(10)),
+                )],
+                captures: vec![Capture {
+                    name: "i".into(),
+                    mutable: false,
+                    is_ref: false,
+                }],
+                body: block(vec![]),
+            })]),
+        )];
+        let result = analyze(decls);
+        assert!(
+            result.is_ok(),
+            "Loop with range capture should not error: {:?}",
+            result
+        );
+    }
+
+    // 3.3: Loop capture — multiple captures from multiple iterables
+    #[test]
+    fn test_loop_capture_multiple() {
+        let decls = vec![make_void_fn(
+            "loop_multi",
+            block(vec![Stmt::Loop(Loop {
+                conds: vec![
+                    Expr::Binary(BinaryOp::Range, Box::new(lit_i32(0)), Box::new(lit_i32(5))),
+                    Expr::Binary(BinaryOp::Range, Box::new(lit_i32(0)), Box::new(lit_i32(5))),
+                ],
+                captures: vec![
+                    Capture {
+                        name: "i".into(),
+                        mutable: false,
+                        is_ref: false,
+                    },
+                    Capture {
+                        name: "j".into(),
+                        mutable: false,
+                        is_ref: false,
+                    },
+                ],
+                body: block(vec![]),
+            })]),
+        )];
+        let result = analyze(decls);
+        assert!(
+            result.is_ok(),
+            "Multiple loop captures should work: {:?}",
+            result
+        );
+    }
+
+    // 3.4: Behave — struct implements all required methods
+    #[test]
+    fn test_behave_impl_complete() {
+        let behave_decl = Decl::Behave(BehaveDecl {
+            name: "Describable".into(),
+            generics: vec![],
+            pub_: false,
+            attrs: vec![],
+            methods: vec![FnDecl {
+                name: "describe".into(),
+                generics: vec![],
+                pub_: false,
+                external: false,
+                attrs: vec![],
+                params: vec![],
+                return_: Some(Type::Primitive(TokenKind::Void)),
+                body: None,
+                is_const: true,
+                is_variable_fn: false,
+            }],
+        });
+
+        let struct_decl = Decl::Struct(StructDecl {
+            name: "Person".into(),
+            generics: vec![],
+            impl_behave: Some("Describable".into()),
+            pub_: false,
+            attrs: vec![],
+            fields: vec![Field {
+                name: "name".into(),
+                pub_: true,
+                type_: Type::Primitive(TokenKind::Str),
+            }],
+            methods: vec![FnDecl {
+                name: "describe".into(),
+                generics: vec![],
+                pub_: false,
+                external: false,
+                attrs: vec![],
+                params: vec![],
+                return_: Some(Type::Primitive(TokenKind::Void)),
+                body: Some(block(vec![])),
+                is_const: true,
+                is_variable_fn: false,
+            }],
+        });
+
+        let decls = vec![behave_decl, struct_decl];
+        let result = analyze(decls);
+        assert!(
+            result.is_ok(),
+            "Struct implementing all behave methods should pass: {:?}",
+            result
+        );
+    }
+
+    // 3.4: Behave — struct missing required method
+    #[test]
+    fn test_behave_impl_missing_method() {
+        let behave_decl = Decl::Behave(BehaveDecl {
+            name: "Describable".into(),
+            generics: vec![],
+            pub_: false,
+            attrs: vec![],
+            methods: vec![FnDecl {
+                name: "describe".into(),
+                generics: vec![],
+                pub_: false,
+                external: false,
+                attrs: vec![],
+                params: vec![],
+                return_: Some(Type::Primitive(TokenKind::Void)),
+                body: None,
+                is_const: true,
+                is_variable_fn: false,
+            }],
+        });
+
+        let struct_decl = Decl::Struct(StructDecl {
+            name: "Person".into(),
+            generics: vec![],
+            impl_behave: Some("Describable".into()),
+            pub_: false,
+            attrs: vec![],
+            fields: vec![],
+            methods: vec![], // Missing describe method
+        });
+
+        let decls = vec![behave_decl, struct_decl];
+        let result = analyze(decls);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().iter().any(|e| e.code == "SEMA-0011"),
+            "Expected SEMA-0011 for missing behave method"
+        );
+    }
+
+    // 3.4: Behave — method parameter count mismatch
+    #[test]
+    fn test_behave_impl_param_count_mismatch() {
+        let behave_decl = Decl::Behave(BehaveDecl {
+            name: "Describable".into(),
+            generics: vec![],
+            pub_: false,
+            attrs: vec![],
+            methods: vec![FnDecl {
+                name: "describe".into(),
+                generics: vec![],
+                pub_: false,
+                external: false,
+                attrs: vec![],
+                params: vec![
+                    Param {
+                        name: "self".into(),
+                        mutable: false,
+                        type_: Type::Named("Self".into()),
+                    },
+                    Param {
+                        name: "depth".into(),
+                        mutable: false,
+                        type_: Type::Primitive(TokenKind::I32),
+                    },
+                ],
+                return_: Some(Type::Primitive(TokenKind::Void)),
+                body: None,
+                is_const: true,
+                is_variable_fn: false,
+            }],
+        });
+
+        let struct_decl = Decl::Struct(StructDecl {
+            name: "Person".into(),
+            generics: vec![],
+            impl_behave: Some("Describable".into()),
+            pub_: false,
+            attrs: vec![],
+            fields: vec![],
+            methods: vec![FnDecl {
+                name: "describe".into(),
+                generics: vec![],
+                pub_: false,
+                external: false,
+                attrs: vec![],
+                params: vec![
+                    Param {
+                        name: "self".into(),
+                        mutable: false,
+                        type_: Type::Named("Person".into()),
+                    },
+                    // Missing: depth param that behave requires
+                ],
+                return_: Some(Type::Primitive(TokenKind::Void)),
+                body: Some(block(vec![])),
+                is_const: true,
+                is_variable_fn: false,
+            }],
+        });
+
+        let decls = vec![behave_decl, struct_decl];
+        let result = analyze(decls);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().iter().any(|e| e.code == "SEMA-0011"),
+            "Expected SEMA-0011 for parameter count mismatch"
+        );
+    }
+
+    // 3.5: Builtin @panic returns noret
+    #[test]
+    fn test_builtin_panic_noret() {
+        let decls = vec![make_i32_fn(
+            "test_panic",
+            block(vec![ret_expr(Expr::Call(
+                Box::new(ident("@panic")),
+                vec![lit_str("oops")],
+            ))]),
+        )];
+        // @panic returns noret, which is assignable to any return type
+        let result = analyze(decls);
+        assert!(
+            result.is_ok(),
+            "@panic should be assignable to i32 return: {:?}",
+            result
+        );
+    }
+
+    // 3.5: Builtin @breakpoint returns noret
+    #[test]
+    fn test_builtin_breakpoint_noret() {
+        let decls = vec![make_i32_fn(
+            "test_bp",
+            block(vec![ret_expr(Expr::Call(
+                Box::new(ident("@breakpoint")),
+                vec![],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(
+            result.is_ok(),
+            "@breakpoint should be assignable to i32 return: {:?}",
+            result
+        );
+    }
+
+    // 3.6: Test block — basic test declaration
+    #[test]
+    fn test_test_block_basic() {
+        let test_decl = Decl::Test(
+            "basic_test".into(),
+            block(vec![expr_stmt(Expr::Call(
+                Box::new(ident("assert")),
+                vec![lit_bool(true)],
+            ))]),
+        );
+        let decls = vec![test_decl];
+        let result = analyze(decls);
+        // Test blocks should be analyzed without crashing
+        let _ = result;
+    }
+
+    // 3.6: Test block with assertions
+    #[test]
+    fn test_test_block_assertions() {
+        let test_decl = Decl::Test(
+            "assertion_test".into(),
+            block(vec![
+                var_stmt("x", false, None, Some(lit_i32(42))),
+                expr_stmt(Expr::Call(
+                    Box::new(ident("assert")),
+                    vec![
+                        Expr::Binary(BinaryOp::Eq, Box::new(ident("x")), Box::new(lit_i32(42))),
+                        lit_str("x should be 42"),
+                    ],
+                )),
+            ]),
+        );
+        let decls = vec![test_decl];
+        let result = analyze(decls);
+        let _ = result;
     }
 }

@@ -404,15 +404,41 @@ impl TypeChecker {
     }
 
     fn check_loop(&mut self, l: &Loop, table: &mut SymbolTable) {
-        for cond in &l.conds {
+        // Infer capture types from loop conditions before checking the body
+        let mut capture_types: Vec<TypeInfo> = Vec::new();
+        let has_captures = !l.captures.is_empty();
+
+        for (ci, cond) in l.conds.iter().enumerate() {
             let ct = self.check_expr(cond, table);
             if let Some(ref ct) = ct {
-                if !ct.is_bool() && !ct.is_noret() {
-                    self.error(
-                        "SEMA-0007",
-                        format!("Condition must be of type 'bool', found '{}'", ct.display()),
-                    );
+                if has_captures {
+                    // For-each loop: conditions are iterables, not booleans
+                    let elem_type = match ct {
+                        TypeInfo::Array(inner, _) => (**inner).clone(),
+                        TypeInfo::Ref(_, inner) => match inner.as_ref() {
+                            TypeInfo::Array(inner2, _) => (**inner2).clone(),
+                            _ => TypeInfo::AnyType,
+                        },
+                        TypeInfo::Str => TypeInfo::Char,
+                        TypeInfo::Optional(inner) => (**inner).clone(),
+                        _ => TypeInfo::AnyType,
+                    };
+                    // Fill types for any extra captures beyond conditions
+                    while capture_types.len() <= ci {
+                        capture_types.push(TypeInfo::AnyType);
+                    }
+                    capture_types[ci] = elem_type;
+                } else {
+                    // While loop: conditions must be bool
+                    if !ct.is_bool() && !ct.is_noret() {
+                        self.error(
+                            "SEMA-0007",
+                            format!("Condition must be of type 'bool', found '{}'", ct.display()),
+                        );
+                    }
                 }
+            } else {
+                capture_types.push(TypeInfo::AnyType);
             }
         }
 
@@ -423,11 +449,16 @@ impl TypeChecker {
 
         if !l.captures.is_empty() {
             table.push_scope();
-            for cap in &l.captures {
+            for (i, cap) in l.captures.iter().enumerate() {
+                let cap_type = if i < capture_types.len() {
+                    capture_types[i].clone()
+                } else {
+                    TypeInfo::AnyType
+                };
                 let _ = table.insert(
                     &cap.name,
                     Symbol::Variable {
-                        type_: TypeInfo::AnyType,
+                        type_: cap_type,
                         mutable: cap.mutable,
                         is_const: false,
                     },
@@ -446,7 +477,13 @@ impl TypeChecker {
     }
 
     fn check_try_catch(&mut self, tc: &TryCatch, table: &mut SymbolTable) {
+        // Save reached_end — try and catch are separate paths
+        let saved_reached = self.reached_end;
+        self.reached_end = false;
         self.check_block(&tc.try_body, table);
+        let try_reached = self.reached_end;
+
+        self.reached_end = false;
         if !tc.capture.is_empty() {
             table.push_scope();
             for cap in &tc.capture {
@@ -460,9 +497,13 @@ impl TypeChecker {
                 );
             }
             self.check_block(&tc.catch_body, table);
+            let catch_reached = self.reached_end;
             table.pop_scope();
+            self.reached_end = saved_reached || (try_reached && catch_reached);
         } else {
             self.check_block(&tc.catch_body, table);
+            let catch_reached = self.reached_end;
+            self.reached_end = saved_reached || (try_reached && catch_reached);
         }
     }
 
@@ -1341,15 +1382,43 @@ impl TypeChecker {
         match table.lookup(behave_name) {
             Some(Symbol::Behave(b)) => {
                 for bm in &b.methods {
-                    let implemented = type_methods.iter().any(|tm| tm.name == bm.name);
-                    if !implemented {
-                        self.error(
-                            "SEMA-0011",
-                            format!(
-                                "Struct '{}' does not implement behave trait method '{}'",
-                                type_name, bm.name
-                            ),
-                        );
+                    let matching = type_methods.iter().find(|tm| tm.name == bm.name);
+                    match matching {
+                        Some(tm) => {
+                            // Check parameter count (excluding self param from both)
+                            let behave_param_count = bm.params.len().saturating_sub(1);
+                            let impl_param_count = tm.params.len().saturating_sub(1);
+                            if behave_param_count != impl_param_count {
+                                self.error(
+                                    "SEMA-0011",
+                                    format!(
+                                        "Struct '{}' method '{}' parameter count mismatch for behave '{}': expected {} params, found {}",
+                                        type_name, bm.name, behave_name, behave_param_count, impl_param_count
+                                    ),
+                                );
+                            }
+                            // Check return type compatibility
+                            if let (Some(bt), Some(it)) = (&bm.return_, &tm.return_) {
+                                if !it.is_assignable_to(bt) && !it.is_noret() {
+                                    self.error(
+                                        "SEMA-0011",
+                                        format!(
+                                            "Struct '{}' method '{}' return type mismatch for behave '{}': expected '{}', found '{}'",
+                                            type_name, bm.name, behave_name, bt.display(), it.display()
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+                        None => {
+                            self.error(
+                                "SEMA-0011",
+                                format!(
+                                    "Struct '{}' does not implement behave trait method '{}'",
+                                    type_name, bm.name
+                                ),
+                            );
+                        }
                     }
                 }
             }

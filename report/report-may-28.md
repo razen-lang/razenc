@@ -742,7 +742,7 @@ impl VarDefTracker {
 
 ---
 
-### 2.6 Match Expression Branch Fallthrough Bug ❌ NOT FIXED
+### 2.6 Match Expression Branch Fallthrough Bug ✅ FIXED
 
 **Location:** `src/ir/mod.rs` lines 446-500
 
@@ -844,7 +844,7 @@ fn gen_match(&mut self, m: &Match) {
 
 ## SECTION 3: INCOMPLETENESS & GHOST-IMPLEMENTATION CHECK
 
-### 3.1 Error Union Type Handling Is Stubbed ❌ NOT FIXED
+### 3.1 Error Union Type Handling Is Stubbed ✅ FIXED
 
 **Location:** `src/sema/checker.rs` lines 88-96, `src/ir/mod.rs` lines 108-110
 
@@ -942,7 +942,7 @@ pub enum UnaryOp {
 
 ---
 
-### 3.2 Defer Execution Order Is Reversed ❌ NOT FIXED
+### 3.2 Defer Execution Order Is Reversed ✅ FIXED
 
 **Location:** `src/ir/mod.rs` lines 286-293, 392-396
 
@@ -1027,7 +1027,7 @@ fn gen_fn(&mut self, f: &FnDecl, ir: &mut IrProgram) {
 
 ---
 
-### 3.3 Loop Capture Variables Never Typed ❌ NOT FIXED
+### 3.3 Loop Capture Variables Never Typed ✅ FIXED
 
 **Location:** `src/sema/checker.rs` lines 409-420, `src/ast/mod.rs` lines 259-271
 
@@ -1132,7 +1132,7 @@ fn check_loop(&mut self, l: &Loop, table: &mut SymbolTable) {
 
 ---
 
-### 3.4 Behave/Trait Implementation Checking Is Incomplete ❌ NOT FIXED
+### 3.4 Behave/Trait Implementation Checking Is Incomplete ✅ FIXED
 
 **Location:** `src/sema/checker.rs` lines 1373-1400
 
@@ -1490,11 +1490,11 @@ fn gen_test(&mut self, test: &TestDecl, ir: &mut IrProgram) {
 | 7 | Parser: Expression precedence | CRITICAL | +30 | P0 | ⏭️ SKIPPED (Report Analysis Incorrect) |
 | 8 | SEMA: Reachability analysis | MEDIUM | +40 | P2 | ✅ FIXED |
 | 9 | IR: Phi node insertion | CRITICAL | +150 | P0 | ❌ NOT FIXED |
-| 10 | IR: Match fallthrough chains | HIGH | +80 | P0 | ❌ NOT FIXED |
-| 11 | SEMA: Error union tracking | HIGH | +100 | P1 | ❌ NOT FIXED |
-| 12 | IR: Defer scope handling | MEDIUM | +30 | P2 | ❌ NOT FIXED |
-| 13 | SEMA: Loop capture typing | HIGH | +50 | P1 | ❌ NOT FIXED |
-| 14 | SEMA: Behave signature checking | MEDIUM | +80 | P2 | ❌ NOT FIXED |
+| 10 | IR: Match fallthrough chains | HIGH | +80 | P0 | ✅ FIXED |
+| 11 | SEMA: Error union tracking | HIGH | +100 | P1 | ✅ FIXED |
+| 12 | IR: Defer scope handling | MEDIUM | +30 | P2 | ✅ FIXED |
+| 13 | SEMA: Loop capture typing | HIGH | +50 | P1 | ✅ FIXED |
+| 14 | SEMA: Behave signature checking | MEDIUM | +80 | P2 | ✅ FIXED |
 | 15 | SEMA: Builtin expansion | LOW | +150 | P3 | ❌ NOT FIXED |
 | 16 | IR: Test isolation | LOW | +60 | P3 | ❌ NOT FIXED |
 

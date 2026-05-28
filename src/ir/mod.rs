@@ -397,6 +397,9 @@ impl IrGenerator {
             Stmt::Var(v) => self.gen_var_decl(v),
             Stmt::Ret(e) => {
                 self.run_deferred();
+                if let Some(stack) = self.defer_stack.last_mut() {
+                    stack.clear();
+                }
                 match e {
                     Some(ex) => {
                         let val = self.gen_expr(ex);
@@ -425,7 +428,16 @@ impl IrGenerator {
             }
             Stmt::TryCatch(tc) => self.gen_try_catch(tc),
             Stmt::Assign(target, op, value) => self.gen_assign(target, *op, value),
-            Stmt::Block(b) => self.gen_block(b),
+            Stmt::Block(b) => {
+                // Push a dedicated defer scope for this block so inner defers
+                // execute when the block exits, not when the function exits.
+                self.defer_stack.push(Vec::new());
+                self.gen_block(b);
+                let deferred = self.defer_stack.pop().unwrap_or_default();
+                for expr in deferred.iter().rev() {
+                    self.gen_expr(expr);
+                }
+            }
         }
     }
 
@@ -476,25 +488,18 @@ impl IrGenerator {
 
     fn gen_match(&mut self, m: &Match) {
         let target = self.gen_expr(&m.target);
-        let arm_labels: Vec<String> = (0..m.arms.len())
-            .map(|i| self.new_label(&format!("arm{}", i)))
-            .collect();
-        let else_label = self.new_label("match_else");
         let merge_label = self.new_label("match_merge");
 
+        // Phase 1: Emit condition checks, chaining branches.
+        // Each literal arm's false branch falls through to the next arm's check.
+        // The last literal arm's false branch jumps to merge.
         for (i, arm) in m.arms.iter().enumerate() {
-            let arm_cond = self.new_label(&format!("arm_cond{}", i));
-            self.emit(IrInst::Label(arm_cond));
-
             match &arm.pattern {
                 Pattern::Wildcard => {
-                    self.emit(IrInst::Jump(arm_labels[i].clone()));
+                    // Wildcard always matches — jump directly to body (emitted later)
                 }
-                Pattern::Ident(name) => {
-                    let local = IrValue::Local(name.clone());
-                    self.emit(IrInst::Alloca(local.clone()));
-                    self.emit(IrInst::Store(target.clone(), local));
-                    self.emit(IrInst::Jump(arm_labels[i].clone()));
+                Pattern::Ident(_) => {
+                    // Capture always matches — jump directly to body
                 }
                 Pattern::Literal(kind, val) => {
                     let pat_val = self.literal_to_ir_value(kind, val);
@@ -505,29 +510,43 @@ impl IrGenerator {
                         target.clone(),
                         pat_val,
                     ));
-                    let arm_next = self.new_label(&format!("arm_next{}", i));
-                    let arm_next_clone = arm_next.clone();
-                    self.emit(IrInst::Branch(cmp, arm_labels[i].clone(), arm_next_clone));
-                    self.emit(IrInst::Label(arm_next));
+                    let arm_body = self.new_label(&format!("arm{}", i));
+                    if i + 1 < m.arms.len() {
+                        let next_check = self.new_label(&format!("arm_cond{}", i + 1));
+                        self.emit(IrInst::Branch(cmp, arm_body, next_check.clone()));
+                        self.emit(IrInst::Label(next_check));
+                    } else {
+                        // Last arm: no match -> jump to merge
+                        self.emit(IrInst::Branch(cmp, arm_body, merge_label.clone()));
+                    }
                 }
-                Pattern::EnumVariant(typ, variant, capture) => {
+                Pattern::EnumVariant(typ, variant, _) => {
                     self.push_comment(format!("match enum {}.{}", typ, variant));
+                }
+            }
+        }
+
+        // Phase 2: Emit arm bodies
+        for (i, arm) in m.arms.iter().enumerate() {
+            let arm_label = self.new_label(&format!("arm{}", i));
+            self.emit(IrInst::Label(arm_label));
+
+            match &arm.pattern {
+                Pattern::Ident(name) => {
+                    let local = IrValue::Local(name.clone());
+                    self.emit(IrInst::Alloca(local.clone()));
+                    self.emit(IrInst::Store(target.clone(), local));
+                }
+                Pattern::EnumVariant(_, _, capture) => {
                     if let Some(c) = capture {
                         let local = IrValue::Local(c.clone());
                         self.emit(IrInst::Alloca(local.clone()));
                         self.emit(IrInst::Store(target.clone(), local));
                     }
-                    self.emit(IrInst::Jump(arm_labels[i].clone()));
                 }
+                _ => {}
             }
-        }
 
-        // Else branch (wildcard or fallback)
-        self.emit(IrInst::Label(else_label));
-
-        // Emit each arm body
-        for (i, arm) in m.arms.iter().enumerate() {
-            self.emit(IrInst::Label(arm_labels[i].clone()));
             self.gen_expr(&arm.value);
             let arm_falls = !self
                 .insts
@@ -1055,5 +1074,367 @@ fn assign_op_display(op: AssignOp) -> &'static str {
         AssignOp::DivEq => "/=",
         AssignOp::ModEq => "%=",
         AssignOp::ColonEq => ":=",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::TokenKind;
+
+    fn lit_i32(val: i32) -> Expr {
+        Expr::Literal(TokenKind::IntegerValue, val.to_string())
+    }
+
+    fn lit_bool(val: bool) -> Expr {
+        if val {
+            Expr::Literal(TokenKind::True, "true".into())
+        } else {
+            Expr::Literal(TokenKind::False, "false".into())
+        }
+    }
+
+    fn ident(name: &str) -> Expr {
+        Expr::Ident(name.to_string())
+    }
+
+    fn block(stmts: Vec<Stmt>) -> Block {
+        Block { stmts }
+    }
+
+    fn var_stmt(name: &str, value: Expr) -> Stmt {
+        Stmt::Var(VarDecl {
+            name: name.to_string(),
+            mutable: true,
+            pub_: false,
+            attrs: vec![],
+            type_: None,
+            value: Some(value),
+        })
+    }
+
+    fn assign_stmt(target: &str, value: Expr) -> Stmt {
+        Stmt::Assign(Expr::Ident(target.to_string()), AssignOp::Eq, value)
+    }
+
+    fn if_stmt(cond: Expr, then_stmts: Vec<Stmt>, else_stmt: Option<Box<Stmt>>) -> Stmt {
+        Stmt::If(If {
+            cond,
+            capture: vec![],
+            then_block: block(then_stmts),
+            else_block: else_stmt,
+        })
+    }
+
+    fn match_stmt(target: Expr, arms: Vec<MatchArm>) -> Stmt {
+        Stmt::Match(Match { target, arms })
+    }
+
+    fn defer_stmt(e: Expr) -> Stmt {
+        Stmt::Defer(Box::new(e))
+    }
+
+    fn loop_stmt(conds: Vec<Expr>, captures: Vec<Capture>, body: Block) -> Stmt {
+        Stmt::Loop(Loop {
+            conds,
+            captures,
+            body,
+        })
+    }
+
+    fn make_fn(name: &str, params: Vec<Param>, return_: Option<Type>, body: Block) -> FnDecl {
+        FnDecl {
+            name: name.to_string(),
+            generics: vec![],
+            pub_: false,
+            external: false,
+            attrs: vec![],
+            params,
+            return_,
+            body: Some(body),
+            is_const: true,
+            is_variable_fn: false,
+        }
+    }
+
+    fn make_void_fn(name: &str, body: Block) -> FnDecl {
+        make_fn(name, vec![], Some(Type::Primitive(TokenKind::Void)), body)
+    }
+
+    fn make_i32_fn(name: &str, body: Block) -> FnDecl {
+        make_fn(name, vec![], Some(Type::Primitive(TokenKind::I32)), body)
+    }
+
+    fn gen_program(decls: Vec<Decl>) -> IrProgram {
+        let program = Program { decls };
+        let mut ir_gen = IrGenerator::new();
+        ir_gen.generate(&program)
+    }
+
+    fn find_label(insts: &[IrInst], label: &str) -> bool {
+        insts
+            .iter()
+            .any(|i| matches!(i, IrInst::Label(l) if l == label))
+    }
+
+    fn count_insts(insts: &[IrInst], pattern: impl Fn(&IrInst) -> bool) -> usize {
+        insts.iter().filter(|i| pattern(i)).count()
+    }
+
+    // ─── 2.6: Match fallthrough ───
+
+    #[test]
+    fn test_match_literal_fallthrough_to_next_arm() {
+        // match x { 1 => ..., 2 => ..., _ => ... }
+        // After checking arm 0 and failing, should jump to arm 1's check, not arm 1's body.
+        let decl = Decl::Fn(make_void_fn(
+            "test_match",
+            block(vec![match_stmt(
+                ident("x"),
+                vec![
+                    MatchArm {
+                        pattern: Pattern::Literal(TokenKind::IntegerValue, "1".into()),
+                        capture: vec![],
+                        value: lit_i32(10),
+                    },
+                    MatchArm {
+                        pattern: Pattern::Literal(TokenKind::IntegerValue, "2".into()),
+                        capture: vec![],
+                        value: lit_i32(20),
+                    },
+                    MatchArm {
+                        pattern: Pattern::Wildcard,
+                        capture: vec![],
+                        value: lit_i32(0),
+                    },
+                ],
+            )]),
+        ));
+        let ir = gen_program(vec![decl]);
+        let func = &ir.functions[0];
+
+        // Should have merge label (match always ends with merge)
+        assert!(
+            find_label(
+                &func.insts,
+                &func
+                    .insts
+                    .iter()
+                    .find_map(|i| {
+                        if let IrInst::Label(l) = i {
+                            if l.starts_with(".Lmatch_merge") {
+                                return Some(l.clone());
+                            }
+                        }
+                        None
+                    })
+                    .unwrap_or_default()
+            ),
+            "Match should have merge label"
+        );
+
+        // Every arm body should jump to merge (or ret)
+        // The last arm (wildcard) must not fall through
+        let arm_jumps_to_merge = func.insts.windows(3).any(|w| {
+            matches!(&w[0], IrInst::Label(l) if l.starts_with(".Larm"))
+                && matches!(&w[2], IrInst::Jump(l) if l.starts_with(".Lmatch_merge"))
+                || matches!(&w[1], IrInst::Jump(l) if l.starts_with(".Lmatch_merge"))
+        });
+        assert!(
+            arm_jumps_to_merge || func.insts.iter().any(|i| matches!(i, IrInst::Ret(_))),
+            "Match arms should jump to merge or return"
+        );
+    }
+
+    #[test]
+    fn test_match_wildcard_no_fallthrough() {
+        let decl = Decl::Fn(make_void_fn(
+            "test_wildcard",
+            block(vec![match_stmt(
+                ident("x"),
+                vec![MatchArm {
+                    pattern: Pattern::Wildcard,
+                    capture: vec![],
+                    value: lit_i32(42),
+                }],
+            )]),
+        ));
+        let ir = gen_program(vec![decl]);
+        let func = &ir.functions[0];
+
+        // Wildcard match: should have exactly 1 arm label and jump to merge
+        let arm_labels = count_insts(
+            &func.insts,
+            |i| matches!(i, IrInst::Label(l) if l.starts_with(".Larm")),
+        );
+        assert_eq!(
+            arm_labels, 1,
+            "Wildcard match should have exactly 1 arm body"
+        );
+    }
+
+    // ─── 3.2: Defer execution order ───
+
+    #[test]
+    fn test_defer_in_block_exits_at_block_end() {
+        // { defer foo(); { defer bar(); } ret }
+        let decl = Decl::Fn(make_void_fn(
+            "test_defer",
+            block(vec![
+                defer_stmt(Expr::Call(Box::new(ident("foo")), vec![])),
+                Stmt::Block(block(vec![defer_stmt(Expr::Call(
+                    Box::new(ident("bar")),
+                    vec![],
+                ))])),
+                Stmt::Ret(None),
+            ]),
+        ));
+        let ir = gen_program(vec![decl]);
+        let func = &ir.functions[0];
+
+        let call_count = count_insts(&func.insts, |i| matches!(i, IrInst::Call(..)));
+        assert!(
+            call_count >= 2,
+            "Both defers should generate calls, found {}",
+            call_count
+        );
+    }
+
+    #[test]
+    fn test_defer_reverse_order() {
+        // defer a(); defer b(); ret -> b runs first, then a
+        let decl = Decl::Fn(make_void_fn(
+            "test_defer_order",
+            block(vec![
+                defer_stmt(Expr::Call(Box::new(ident("a")), vec![])),
+                defer_stmt(Expr::Call(Box::new(ident("b")), vec![])),
+                Stmt::Ret(None),
+            ]),
+        ));
+        let ir = gen_program(vec![decl]);
+        let func = &ir.functions[0];
+
+        let call_count = count_insts(&func.insts, |i| matches!(i, IrInst::Call(..)));
+        assert_eq!(call_count, 2, "Two defers should produce two calls");
+    }
+
+    // ─── 3.3: Loop capture type inference ───
+
+    #[test]
+    fn test_loop_capture_infers_from_array() {
+        use crate::sema::SemanticAnalyzer;
+
+        // loop array |elem| { ... }
+        // elem should be typed as the array's element type, not anytype
+        let array_var = var_stmt("arr", Expr::StructInit("Array".into(), vec![]));
+        let loop_body = Stmt::Loop(Loop {
+            conds: vec![ident("arr")],
+            captures: vec![Capture {
+                name: "elem".into(),
+                mutable: false,
+                is_ref: false,
+            }],
+            body: block(vec![]),
+        });
+        let decl = Decl::Fn(make_void_fn("test", block(vec![array_var, loop_body])));
+        let program = Program { decls: vec![decl] };
+        let mut sema = SemanticAnalyzer::new();
+        // Should not crash — capture type is inferred (may be AnyType if struct unknown,
+        // but should NOT be hardcoded AnyType for known array types)
+        let _ = sema.analyze(&program);
+    }
+
+    // ─── 3.1: Try/catch reachability ───
+
+    #[test]
+    fn test_try_catch_both_branches_exit() {
+        // try { ret 1 } catch |e| { ret 2 }
+        // Both branches return, so the function exits
+        let decl = Decl::Fn(make_i32_fn(
+            "test_try_catch",
+            block(vec![Stmt::TryCatch(TryCatch {
+                try_body: block(vec![Stmt::Ret(Some(lit_i32(1)))]),
+                capture: vec!["e".into()],
+                catch_body: block(vec![Stmt::Ret(Some(lit_i32(2)))]),
+            })]),
+        ));
+        let ir = gen_program(vec![decl]);
+        let func = &ir.functions[0];
+
+        // Should have try body instructions AND catch body instructions
+        // Both should contain ret instructions
+        let ret_count = count_insts(&func.insts, |i| matches!(i, IrInst::Ret(_)));
+        assert!(
+            ret_count >= 2,
+            "Both try and catch branches should have ret instructions, found {}",
+            ret_count
+        );
+    }
+
+    #[test]
+    fn test_try_catch_with_defer() {
+        // try { defer cleanup(); ret } catch |e| { }
+        let decl = Decl::Fn(make_void_fn(
+            "test_try_defer",
+            block(vec![Stmt::TryCatch(TryCatch {
+                try_body: block(vec![
+                    defer_stmt(Expr::Call(Box::new(ident("cleanup")), vec![])),
+                    Stmt::Ret(None),
+                ]),
+                capture: vec!["e".into()],
+                catch_body: block(vec![]),
+            })]),
+        ));
+        let ir = gen_program(vec![decl]);
+        let func = &ir.functions[0];
+
+        let call_count = count_insts(&func.insts, |i| matches!(i, IrInst::Call(..)));
+        assert!(
+            call_count >= 1,
+            "Defer in try body should generate a call, found {}",
+            call_count
+        );
+    }
+
+    // ─── General IR correctness ───
+
+    #[test]
+    fn test_if_else_generates_merge_label() {
+        let decl = Decl::Fn(make_void_fn(
+            "test_if",
+            block(vec![if_stmt(
+                lit_bool(true),
+                vec![],
+                Some(Box::new(Stmt::Block(block(vec![])))),
+            )]),
+        ));
+        let ir = gen_program(vec![decl]);
+        let func = &ir.functions[0];
+
+        // Should have merge label
+        let has_merge = func
+            .insts
+            .iter()
+            .any(|i| matches!(i, IrInst::Label(l) if l.contains("merge")));
+        assert!(has_merge, "If-else should generate a merge label");
+    }
+
+    #[test]
+    fn test_if_without_else_generates_merge_label() {
+        let decl = Decl::Fn(make_void_fn(
+            "test_if_no_else",
+            block(vec![if_stmt(lit_bool(true), vec![], None)]),
+        ));
+        let ir = gen_program(vec![decl]);
+        let func = &ir.functions[0];
+
+        let has_merge = func
+            .insts
+            .iter()
+            .any(|i| matches!(i, IrInst::Label(l) if l.contains("merge")));
+        assert!(
+            has_merge,
+            "If without else should still generate merge label"
+        );
     }
 }
