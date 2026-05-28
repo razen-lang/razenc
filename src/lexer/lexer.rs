@@ -70,29 +70,33 @@ impl<'a> Lexer<'a> {
                 let mut depth: u32 = 1;
                 let mut unclosed = false;
                 while pos < len && depth > 0 {
+                    // Check for nested /* FIRST, before newline handling
+                    if chars[pos] == '/' && pos + 1 < len && chars[pos + 1] == '*' {
+                        depth += 1;
+                        pos += 2;
+                        col += 2;
+                        continue;
+                    }
+                    // Check for closing */
+                    if chars[pos] == '*' && pos + 1 < len && chars[pos + 1] == '/' {
+                        depth -= 1;
+                        pos += 2;
+                        col += 2;
+                        continue;
+                    }
+                    // Handle newlines AFTER checking comment delimiters
                     if chars[pos] == '\n' {
                         line += 1;
                         col = 1;
                         pos += 1;
                         continue;
-                    } else if chars[pos] == '/' && pos + 1 < len && chars[pos + 1] == '*' {
-                        depth += 1;
-                        pos += 2;
-                        col += 2;
-                        continue;
-                    } else if chars[pos] == '*' && pos + 1 < len && chars[pos + 1] == '/' {
-                        depth -= 1;
-                        pos += 2;
-                        col += 2;
-                        continue;
-                    } else {
-                        if chars[pos] == '\t' {
-                            col += 4;
-                        } else {
-                            col += 1;
-                        }
-                        pos += 1;
                     }
+                    if chars[pos] == '\t' {
+                        col += 4;
+                    } else {
+                        col += 1;
+                    }
+                    pos += 1;
                 }
                 if depth > 0 {
                     unclosed = true;
@@ -212,10 +216,10 @@ impl<'a> Lexer<'a> {
                         col = 1;
                     } else if chars[pos] == '\\' && pos + 1 < len {
                         let esc_start = pos;
-                        pos += 1;
-                        col += 1;
                         let esc_line = line;
                         let esc_col = col;
+                        pos += 1;
+                        col += 1;
                         match self.validate_escape(chars[pos], &chars, pos, line, col) {
                             Ok(skip) => {
                                 pos += skip;

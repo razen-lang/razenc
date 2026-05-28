@@ -252,8 +252,10 @@ impl TypeChecker {
             }
         }
 
-        // Save current exit state to merge branches
         let pre_if = self.reached_end;
+
+        let cond_always_true = matches!(&if_.cond, Expr::Literal(TokenKind::True, _));
+        let cond_always_false = matches!(&if_.cond, Expr::Literal(TokenKind::False, _));
 
         if !if_.capture.is_empty() {
             if let Some(ref ct) = ct {
@@ -282,33 +284,40 @@ impl TypeChecker {
                     },
                 );
             }
-            self.reached_end = pre_if;
+            self.reached_end = pre_if && !cond_always_false;
             self.check_block(&if_.then_block, table);
             let then_exits = self.reached_end;
             table.pop_scope();
 
             if let Some(ref else_stmt) = if_.else_block {
-                self.reached_end = pre_if;
+                self.reached_end = pre_if && !cond_always_true;
                 self.check_stmt(else_stmt, table);
                 let else_exits = self.reached_end;
                 self.reached_end = pre_if || (then_exits && else_exits);
             } else {
-                self.reached_end = pre_if;
+                if cond_always_true && then_exits {
+                    self.reached_end = true;
+                } else {
+                    self.reached_end = pre_if;
+                }
             }
         } else {
-            self.reached_end = pre_if;
+            self.reached_end = pre_if && !cond_always_false;
             let then_exits = self.check_block(&if_.then_block, table);
 
             if let Some(ref else_stmt) = if_.else_block {
-                self.reached_end = pre_if;
+                self.reached_end = pre_if && !cond_always_true;
                 self.check_stmt(else_stmt, table);
                 let else_exits = self.reached_end;
-                self.reached_end = pre_if || (then_exits && else_exits);
+                self.reached_end = pre_if
+                    || (then_exits && else_exits)
+                    || (cond_always_true && then_exits)
+                    || (cond_always_false && else_exits);
             } else {
-                self.reached_end = pre_if || then_exits;
-                // For if without else, only one path exits, so reset
-                if then_exits {
-                    self.reached_end = false;
+                if cond_always_true && then_exits {
+                    self.reached_end = true;
+                } else {
+                    self.reached_end = pre_if;
                 }
             }
         }

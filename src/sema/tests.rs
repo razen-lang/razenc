@@ -188,8 +188,8 @@ mod tests {
         )];
         let result = analyze(decls);
         assert!(
-            result.is_err(),
-            "If without else should warn about missing return"
+            result.is_ok(),
+            "if true {{ ret ... }} always exits, so no missing return"
         );
     }
 
