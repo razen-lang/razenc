@@ -798,11 +798,7 @@ impl<'a> Lexer<'a> {
             // Multi-character @ tokens: @vec, @map, @set
             if ch == '@' && pos + 1 < len {
                 let next = chars[pos + 1];
-                if next == 'v'
-                    && pos + 3 < len
-                    && chars[pos + 2] == 'e'
-                    && chars[pos + 3] == 'c'
-                {
+                if next == 'v' && pos + 3 < len && chars[pos + 2] == 'e' && chars[pos + 3] == 'c' {
                     let end_byte = self.byte_offset_of(pos + 4, &chars);
                     result.push(Token::new(
                         TokenKind::AtVec,
@@ -815,11 +811,7 @@ impl<'a> Lexer<'a> {
                     col += 4;
                     continue;
                 }
-                if next == 'm'
-                    && pos + 3 < len
-                    && chars[pos + 2] == 'a'
-                    && chars[pos + 3] == 'p'
-                {
+                if next == 'm' && pos + 3 < len && chars[pos + 2] == 'a' && chars[pos + 3] == 'p' {
                     let end_byte = self.byte_offset_of(pos + 4, &chars);
                     result.push(Token::new(
                         TokenKind::AtMap,
@@ -832,11 +824,7 @@ impl<'a> Lexer<'a> {
                     col += 4;
                     continue;
                 }
-                if next == 's'
-                    && pos + 3 < len
-                    && chars[pos + 2] == 'e'
-                    && chars[pos + 3] == 't'
-                {
+                if next == 's' && pos + 3 < len && chars[pos + 2] == 'e' && chars[pos + 3] == 't' {
                     let end_byte = self.byte_offset_of(pos + 4, &chars);
                     result.push(Token::new(
                         TokenKind::AtSet,

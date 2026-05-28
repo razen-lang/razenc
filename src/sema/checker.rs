@@ -31,6 +31,12 @@ pub struct TypeChecker {
     pub inferred_return_type: Option<TypeInfo>,
 }
 
+impl Default for TypeChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeChecker {
     pub fn new() -> Self {
         TypeChecker {
@@ -581,7 +587,7 @@ impl TypeChecker {
                 let ret_type = fndecl
                     .return_
                     .as_ref()
-                    .map(|t| ast_type_to_typeinfo(t))
+                    .map(ast_type_to_typeinfo)
                     .unwrap_or(TypeInfo::Void);
                 Some(TypeInfo::Fn(param_types, Box::new(ret_type)))
             }
@@ -632,8 +638,8 @@ impl TypeChecker {
         match op {
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 if !both_numeric()
-                    && !lt.as_ref().map_or(false, |t| t.is_noret())
-                    && !rt.as_ref().map_or(false, |t| t.is_noret())
+                    && !lt.as_ref().is_some_and(|t| t.is_noret())
+                    && !rt.as_ref().is_some_and(|t| t.is_noret())
                 {
                     let ls = lt.as_ref().map(|t| t.display()).unwrap_or_default();
                     let rs = rt.as_ref().map(|t| t.display()).unwrap_or_default();
@@ -906,7 +912,7 @@ impl TypeChecker {
             }
             None => {
                 if let Expr::Ident(name) = callee {
-                    if table.lookup(name).map_or(false, |s| s.is_function()) {
+                    if table.lookup(name).is_some_and(|s| s.is_function()) {
                         return None;
                     } else if name != "_" && !name.starts_with('@') {
                         self.error("SEMA-0014", "Cannot call non-callable type".into());
@@ -1424,9 +1430,7 @@ fn ast_type_to_typeinfo(t: &Type) -> TypeInfo {
             });
             TypeInfo::Array(Box::new(ast_type_to_typeinfo(inner)), sz)
         }
-        Type::Slice(inner) => {
-            TypeInfo::Array(Box::new(ast_type_to_typeinfo(inner)), None)
-        }
+        Type::Slice(inner) => TypeInfo::Array(Box::new(ast_type_to_typeinfo(inner)), None),
         Type::Fn(params, ret) => {
             let ps: Vec<TypeInfo> = params.iter().map(ast_type_to_typeinfo).collect();
             let r = ast_type_to_typeinfo(ret);

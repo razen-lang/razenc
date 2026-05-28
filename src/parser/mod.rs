@@ -59,7 +59,11 @@ impl Parser {
 
         self.skip_comments();
         while self.pos < self.tokens.len() {
-            println!("[DEBUG] parse loop: pos={}, token={:?}", self.pos, self.tokens.get(self.pos));
+            println!(
+                "[DEBUG] parse loop: pos={}, token={:?}",
+                self.pos,
+                self.tokens.get(self.pos)
+            );
             match self.parse_decl() {
                 Ok(d) => decls.push(d),
                 Err(e) => {
@@ -123,13 +127,13 @@ impl Parser {
     }
 
     fn check(&self, kind: TokenKind) -> bool {
-        self.tokens.get(self.pos).map_or(false, |t| t.kind == kind)
+        self.tokens.get(self.pos).is_some_and(|t| t.kind == kind)
     }
 
     fn check_any(&self, kinds: &[TokenKind]) -> bool {
         self.tokens
             .get(self.pos)
-            .map_or(false, |t| kinds.contains(&t.kind))
+            .is_some_and(|t| kinds.contains(&t.kind))
     }
 
     fn consume_if(&mut self, kind: TokenKind) -> bool {
@@ -917,10 +921,7 @@ impl Parser {
                     )));
                 }
                 self.expect(TokenKind::RightBracket)?;
-                return Ok(Type::Builtin(format!(
-                    "@vec[{}]",
-                    type_to_label(&inner)
-                )));
+                return Ok(Type::Builtin(format!("@vec[{}]", type_to_label(&inner))));
             }
             return Ok(Type::Builtin("@vec".into()));
         }
@@ -935,10 +936,7 @@ impl Parser {
                 }
                 self.expect(TokenKind::RightBrace)?;
                 let inner_str: Vec<String> = types.iter().map(type_to_label).collect();
-                return Ok(Type::Builtin(format!(
-                    "@map{{{}}}",
-                    inner_str.join(", ")
-                )));
+                return Ok(Type::Builtin(format!("@map{{{}}}", inner_str.join(", "))));
             }
             return Ok(Type::Builtin("@map".into()));
         }
@@ -955,10 +953,7 @@ impl Parser {
                     )));
                 }
                 self.expect(TokenKind::RightBracket)?;
-                return Ok(Type::Builtin(format!(
-                    "@set[{}]",
-                    type_to_label(&inner)
-                )));
+                return Ok(Type::Builtin(format!("@set[{}]", type_to_label(&inner))));
             }
             if self.consume_if(TokenKind::LeftBrace) {
                 let mut types = Vec::new();
@@ -970,10 +965,7 @@ impl Parser {
                 }
                 self.expect(TokenKind::RightBrace)?;
                 let inner_str: Vec<String> = types.iter().map(type_to_label).collect();
-                return Ok(Type::Builtin(format!(
-                    "@set{{{}}}",
-                    inner_str.join(", ")
-                )));
+                return Ok(Type::Builtin(format!("@set{{{}}}", inner_str.join(", "))));
             }
             return Ok(Type::Builtin("@set".into()));
         }
@@ -1457,7 +1449,11 @@ impl Parser {
         let mut stmts = Vec::new();
         self.skip_comments();
         while !self.check(TokenKind::RightBrace) && self.pos < self.tokens.len() {
-            println!("[DEBUG]   block loop: pos={}, token={:?}", self.pos, self.tokens.get(self.pos));
+            println!(
+                "[DEBUG]   block loop: pos={}, token={:?}",
+                self.pos,
+                self.tokens.get(self.pos)
+            );
             match self.parse_stmt() {
                 Ok(stmt) => stmts.push(stmt),
                 Err(_) => {

@@ -42,10 +42,24 @@ impl std::fmt::Display for IrValue {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IrOp {
-    Add, Sub, Mul, Div, Mod,
-    Eq, Ne, Lt, Gt, Le, Ge,
-    And, Or,
-    BitAnd, BitOr, BitXor, Shl, Shr,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    And,
+    Or,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
 }
 
 impl std::fmt::Display for IrOp {
@@ -157,6 +171,12 @@ pub struct IrGenerator {
     defer_stack: Vec<Vec<Expr>>,
 }
 
+impl Default for IrGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IrGenerator {
     pub fn new() -> Self {
         IrGenerator {
@@ -249,15 +269,19 @@ impl IrGenerator {
 
     fn const_expr_to_value(&self, expr: &Expr) -> IrValue {
         match expr {
-            Expr::Literal(TokenKind::IntegerValue, v) => {
-                v.parse::<i64>().map(IrValue::ConstInt).unwrap_or(IrValue::ConstInt(0))
-            }
+            Expr::Literal(TokenKind::IntegerValue, v) => v
+                .parse::<i64>()
+                .map(IrValue::ConstInt)
+                .unwrap_or(IrValue::ConstInt(0)),
             Expr::Literal(TokenKind::FloatValue, _) => IrValue::ConstInt(0),
             Expr::Literal(TokenKind::StringValue, v) => IrValue::ConstStr(v.clone()),
             Expr::Literal(TokenKind::True, _) => IrValue::ConstBool(true),
             Expr::Literal(TokenKind::False, _) => IrValue::ConstBool(false),
             Expr::Literal(TokenKind::Nil, _) => IrValue::ConstInt(0),
-            Expr::Literal(_, v) => v.parse::<i64>().map(IrValue::ConstInt).unwrap_or(IrValue::ConstInt(0)),
+            Expr::Literal(_, v) => v
+                .parse::<i64>()
+                .map(IrValue::ConstInt)
+                .unwrap_or(IrValue::ConstInt(0)),
             _ => IrValue::ConstInt(0),
         }
     }
@@ -293,14 +317,19 @@ impl IrGenerator {
             self.defer_stack.pop();
         }
 
-        let has_terminal = self.insts.last().map_or(false, |i| {
-            matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_))
-        });
+        let has_terminal = self
+            .insts
+            .last()
+            .is_some_and(|i| matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_)));
         if !has_terminal {
             self.emit(IrInst::RetVoid);
         }
 
-        let func_params: Vec<(String, Type)> = f.params.iter().map(|p| (p.name.clone(), p.type_.clone())).collect();
+        let func_params: Vec<(String, Type)> = f
+            .params
+            .iter()
+            .map(|p| (p.name.clone(), p.type_.clone()))
+            .collect();
 
         let func = IrFunction {
             name: f.name.clone(),
@@ -420,9 +449,10 @@ impl IrGenerator {
         // Then block
         self.emit(IrInst::Label(then_label));
         self.gen_block(&if_.then_block);
-        let then_falls = !self.insts.last().map_or(false, |i| {
-            matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_))
-        });
+        let then_falls = !self
+            .insts
+            .last()
+            .is_some_and(|i| matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_)));
         if then_falls {
             self.emit(IrInst::Jump(merge_label.clone()));
         }
@@ -432,9 +462,10 @@ impl IrGenerator {
         if let Some(ref else_stmt) = if_.else_block {
             self.gen_stmt(else_stmt);
         }
-        let else_falls = !self.insts.last().map_or(false, |i| {
-            matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_))
-        });
+        let else_falls = !self
+            .insts
+            .last()
+            .is_some_and(|i| matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_)));
         if else_falls {
             self.emit(IrInst::Jump(merge_label.clone()));
         }
@@ -445,7 +476,9 @@ impl IrGenerator {
 
     fn gen_match(&mut self, m: &Match) {
         let target = self.gen_expr(&m.target);
-        let arm_labels: Vec<String> = (0..m.arms.len()).map(|i| self.new_label(&format!("arm{}", i))).collect();
+        let arm_labels: Vec<String> = (0..m.arms.len())
+            .map(|i| self.new_label(&format!("arm{}", i)))
+            .collect();
         let else_label = self.new_label("match_else");
         let merge_label = self.new_label("match_merge");
 
@@ -466,7 +499,12 @@ impl IrGenerator {
                 Pattern::Literal(kind, val) => {
                     let pat_val = self.literal_to_ir_value(kind, val);
                     let cmp = self.new_temp();
-                    self.emit(IrInst::BinOp(IrOp::Eq, cmp.clone(), target.clone(), pat_val));
+                    self.emit(IrInst::BinOp(
+                        IrOp::Eq,
+                        cmp.clone(),
+                        target.clone(),
+                        pat_val,
+                    ));
                     let arm_next = self.new_label(&format!("arm_next{}", i));
                     let arm_next_clone = arm_next.clone();
                     self.emit(IrInst::Branch(cmp, arm_labels[i].clone(), arm_next_clone));
@@ -491,9 +529,10 @@ impl IrGenerator {
         for (i, arm) in m.arms.iter().enumerate() {
             self.emit(IrInst::Label(arm_labels[i].clone()));
             self.gen_expr(&arm.value);
-            let arm_falls = !self.insts.last().map_or(false, |i| {
-                matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_))
-            });
+            let arm_falls = !self
+                .insts
+                .last()
+                .is_some_and(|i| matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_)));
             if arm_falls {
                 self.emit(IrInst::Jump(merge_label.clone()));
             }
@@ -606,7 +645,10 @@ impl IrGenerator {
             }
             _ => {
                 self.gen_expr(target);
-                self.emit(IrInst::Comment(format!("assign op {}", assign_op_display(op))));
+                self.emit(IrInst::Comment(format!(
+                    "assign op {}",
+                    assign_op_display(op)
+                )));
                 self.emit(IrInst::Copy(IrValue::Void, val));
             }
         }
@@ -663,7 +705,11 @@ impl IrGenerator {
                 let _start_val = self.gen_expr(start);
                 let _end_val = self.gen_expr(end);
                 let temp = self.new_temp();
-                self.emit(IrInst::Comment(format!("slice {}{}", if *inclusive { "..=" } else { ".." }, "")));
+                self.emit(IrInst::Comment(format!(
+                    "slice {}{}",
+                    if *inclusive { "..=" } else { ".." },
+                    ""
+                )));
                 self.emit(IrInst::Copy(temp.clone(), obj_val));
                 temp
             }
@@ -709,7 +755,12 @@ impl IrGenerator {
                 let temp = self.new_temp();
 
                 let val_for_catch = val.clone();
-                self.emit(IrInst::Catch(temp.clone(), val_for_catch, IrValue::Label(catch_label.clone()), IrValue::Label(merge_label.clone())));
+                self.emit(IrInst::Catch(
+                    temp.clone(),
+                    val_for_catch,
+                    IrValue::Label(catch_label.clone()),
+                    IrValue::Label(merge_label.clone()),
+                ));
 
                 self.emit(IrInst::Label(catch_label));
                 for cap in capture {
@@ -792,7 +843,17 @@ impl IrGenerator {
             BinaryOp::DivAssign => self.emit(IrInst::BinOp(IrOp::Div, temp.clone(), l, r)),
             BinaryOp::ModAssign => self.emit(IrInst::BinOp(IrOp::Mod, temp.clone(), l, r)),
             BinaryOp::Range | BinaryOp::RangeInclusive => {
-                self.emit(IrInst::Comment(format!("range {}..{}", match &l { IrValue::ConstInt(n) => n.to_string(), _ => "?".to_string() }, match &r { IrValue::ConstInt(n) => n.to_string(), _ => "?".to_string() })));
+                self.emit(IrInst::Comment(format!(
+                    "range {}..{}",
+                    match &l {
+                        IrValue::ConstInt(n) => n.to_string(),
+                        _ => "?".to_string(),
+                    },
+                    match &r {
+                        IrValue::ConstInt(n) => n.to_string(),
+                        _ => "?".to_string(),
+                    }
+                )));
                 self.emit(IrInst::Copy(temp.clone(), l));
             }
         }
@@ -939,23 +1000,33 @@ impl std::fmt::Display for IrInst {
             IrInst::Jump(label) => write!(f, "br {}", label),
             IrInst::Label(label) => write!(f, "{}:", label),
             IrInst::Gep(dst, ptr, idx) => write!(f, "{} = gep {}, {}", dst, ptr, idx),
-            IrInst::FieldAddr(dst, obj, _idx, name) => write!(f, "{} = fieldaddr {}, .{}", dst, obj, name),
+            IrInst::FieldAddr(dst, obj, _idx, name) => {
+                write!(f, "{} = fieldaddr {}, .{}", dst, obj, name)
+            }
             IrInst::PtrToInt(dst, src) => write!(f, "{} = ptrtoint {}", dst, src),
             IrInst::IntToPtr(dst, src) => write!(f, "{} = inttoptr {}", dst, src),
             IrInst::BitCast(dst, src) => write!(f, "{} = bitcast {}", dst, src),
             IrInst::StructInit(dst, name, fields) => {
-                let f_str: Vec<String> = fields.iter().map(|(n, v)| format!(".{} = {}", n, v)).collect();
+                let f_str: Vec<String> = fields
+                    .iter()
+                    .map(|(n, v)| format!(".{} = {}", n, v))
+                    .collect();
                 write!(f, "{} = struct {} {{ {} }}", dst, name, f_str.join(", "))
             }
             IrInst::Copy(dst, src) => write!(f, "{} = copy {}", dst, src),
             IrInst::Comment(msg) => write!(f, "; {}", msg),
             IrInst::Phi(dst, incs) => {
-                let inc_str: Vec<String> = incs.iter().map(|(v, l)| format!("[ {}, {} ]", v, l)).collect();
+                let inc_str: Vec<String> = incs
+                    .iter()
+                    .map(|(v, l)| format!("[ {}, {} ]", v, l))
+                    .collect();
                 write!(f, "{} = phi {}", dst, inc_str.join(", "))
             }
             IrInst::AllocArray(dst, size) => write!(f, "{} = allocarray {}", dst, size),
             IrInst::SetError(dst, src) => write!(f, "{} = set_error {}", dst, src),
-            IrInst::Catch(dst, val, catch_l, merge_l) => write!(f, "{} = catch {}, {}, {}", dst, val, catch_l, merge_l),
+            IrInst::Catch(dst, val, catch_l, merge_l) => {
+                write!(f, "{} = catch {}, {}, {}", dst, val, catch_l, merge_l)
+            }
         }
     }
 }

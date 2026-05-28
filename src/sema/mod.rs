@@ -12,6 +12,12 @@ pub struct SemanticAnalyzer {
     pub checker: TypeChecker,
 }
 
+impl Default for SemanticAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SemanticAnalyzer {
     pub fn new() -> Self {
         let mut table = SymbolTable::new();
@@ -520,7 +526,7 @@ impl SemanticAnalyzer {
                         if let Some(vi) = vt {
                             if let Symbol::Variable { type_, .. } = sym {
                                 if type_.is_void() {
-                                    let _ = self.table.insert_overwrite(
+                                    self.table.insert_overwrite(
                                         &v.name,
                                         Symbol::Variable {
                                             type_: vi.clone(),
@@ -557,7 +563,7 @@ impl SemanticAnalyzer {
                         if let Some(vi) = vt {
                             if let Symbol::Variable { type_, .. } = sym {
                                 if type_.is_void() {
-                                    let _ = self.table.insert_overwrite(
+                                    self.table.insert_overwrite(
                                         &c.name,
                                         Symbol::Variable {
                                             type_: vi.clone(),
@@ -607,25 +613,21 @@ impl SemanticAnalyzer {
 
         // S-SEMA-02: Control flow - verify all paths return for non-void/non-noret
         if let Some(ref ret_type) = declared_ret {
-            if !ret_type.is_void() && !ret_type.is_noret() {
-                if !self.checker.reached_end {
-                    self.checker.error(
+            if !ret_type.is_void() && !ret_type.is_noret() && !self.checker.reached_end {
+                self.checker.error(
                         "SEMA-0009",
                         format!(
                             "Function '{}' has non-void return type '{}' but does not return a value on all paths",
                             fn_sym.name, ret_type.display()
                         ),
                     );
-                }
             }
         }
 
         // S-SEMA-03: Type inference - if no declared return type, use inferred
-        if declared_ret.is_none() {
-            if self.checker.inferred_return_type.is_some() {
-                // Inferred return type is available for future use
-                // (e.g., callers that reference this function)
-            }
+        if declared_ret.is_none() && self.checker.inferred_return_type.is_some() {
+            // Inferred return type is available for future use
+            // (e.g., callers that reference this function)
         }
 
         self.checker.current_return_type = None;

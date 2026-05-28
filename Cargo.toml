@@ -5,3 +5,12 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
+
+[lints.rust]
+unused = "allow"
+
+[lints.clippy]
+print_literal = "allow"
+module_inception = "allow"
+needless_pass_by_value = "allow"
+

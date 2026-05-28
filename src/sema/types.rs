@@ -263,10 +263,8 @@ impl TypeInfo {
                 _ => std::mem::discriminant(self) == std::mem::discriminant(target),
             }
         } else {
-            if self.is_nil() {
-                if target.is_optional() || target.is_pointer() || target.is_noret() {
-                    return true;
-                }
+            if self.is_nil() && (target.is_optional() || target.is_pointer() || target.is_noret()) {
+                return true;
             }
             if let TypeInfo::Optional(inner) = target {
                 return self.is_assignable_to(inner);

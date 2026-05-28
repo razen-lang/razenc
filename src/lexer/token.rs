@@ -209,6 +209,12 @@ pub struct TokenizationResult {
     pub errors: Vec<LexError>,
 }
 
+impl Default for TokenizationResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenizationResult {
     pub fn new() -> Self {
         TokenizationResult {

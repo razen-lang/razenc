@@ -263,7 +263,13 @@ pub fn print_ir(ir_program: &crate::ir::IrProgram) {
             println!("  {}params{}: {}", GREY, RST, params.join(", "));
         }
         if let Some(ref rt) = func.return_type {
-            println!("  {}return{}: {}{}", GREY, RST, CYAN, crate::bdg::type_str(rt));
+            println!(
+                "  {}return{}: {}{}",
+                GREY,
+                RST,
+                CYAN,
+                crate::bdg::type_str(rt)
+            );
         }
         println!();
 
@@ -286,7 +292,11 @@ pub fn print_ir(ir_program: &crate::ir::IrProgram) {
         println!();
         println!("{}{}Globals:{}", BOLD, GREEN, RST);
         for g in &ir_program.globals {
-            let init_str = g.init.as_ref().map(|v| format!(" = {}", v)).unwrap_or_default();
+            let init_str = g
+                .init
+                .as_ref()
+                .map(|v| format!(" = {}", v))
+                .unwrap_or_default();
             println!("  {}{}{}{}", CYAN, g.name, RST, init_str);
         }
     }
@@ -931,7 +941,7 @@ fn print_annotation(a: &Annotation, indent: usize) {
     if a.args.is_empty() {
         println!("{}{}@{}", i, YELLOW, a.name);
     } else {
-        let args_str: Vec<String> = a.args.iter().map(|e| expr_short_str(e)).collect();
+        let args_str: Vec<String> = a.args.iter().map(expr_short_str).collect();
         println!("{}{}@{}({})", i, YELLOW, a.name, args_str.join(", "));
     }
 }

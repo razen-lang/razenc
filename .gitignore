@@ -12,6 +12,12 @@
 .DS_Store
 Thumbs.db
 
+# Coverage
+*.profraw
+*.profdata
+lcov.info
+tarpaulin.html
+
 # Misc
 *.log
 *.tmp
