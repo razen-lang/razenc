@@ -1518,3 +1518,21 @@ fn test_nested_annotation_and_pub() {
         other => panic!("Expected Fn, got {:?}", other),
     }
 }
+
+#[test]
+fn test_generic_call() {
+    let p = parse_ok("main :: fn() -> void { id_val := identity<i32>(42) }");
+    assert_eq!(p.decls.len(), 1);
+}
+
+#[test]
+fn test_sample_02() {
+    let source = r#"
+main :: fn() -> void {
+    sum := 30
+    @compileLog("sum: ", sum)
+}
+"#;
+    let p = parse_ok(source);
+    assert_eq!(p.decls.len(), 1);
+}

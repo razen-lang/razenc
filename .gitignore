@@ -1,3 +1,17 @@
-(report/report-may-28.md is a regular markdown file that should not be ignored)
+# Rust build artifacts
+/target/
 
-# No files to ignore based on the provided changes
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+*.tmp

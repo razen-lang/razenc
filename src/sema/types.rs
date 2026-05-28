@@ -147,6 +147,9 @@ impl TypeInfo {
     pub fn is_pointer(&self) -> bool {
         matches!(self, TypeInfo::Pointer(_))
     }
+    pub fn is_nil(&self) -> bool {
+        matches!(self, TypeInfo::Nil)
+    }
     pub fn is_optional(&self) -> bool {
         matches!(self, TypeInfo::Optional(_))
     }
@@ -220,12 +223,14 @@ impl TypeInfo {
         }
         if std::mem::discriminant(self) == std::mem::discriminant(target) {
             match (self, target) {
-                (TypeInfo::Int(w1, s1), TypeInfo::Int(w2, s2)) => w1 == w2 && s1 == s2,
-                (TypeInfo::Float(w1), TypeInfo::Float(w2)) => w1 == w2,
+                (TypeInfo::Int(_, _), TypeInfo::Int(_, _)) => true,
+                (TypeInfo::Float(_), TypeInfo::Float(_)) => true,
                 (TypeInfo::Ref(m1, i1), TypeInfo::Ref(m2, i2)) => {
                     !(*m1 && !*m2) && i1.is_assignable_to(i2)
                 }
-                (TypeInfo::Pointer(i1), TypeInfo::Pointer(i2)) => i1.is_assignable_to(i2),
+                (TypeInfo::Pointer(i1), TypeInfo::Pointer(i2)) => {
+                    i1.is_assignable_to(i2) || i1.is_void() || i2.is_void()
+                }
                 (TypeInfo::Optional(i1), TypeInfo::Optional(i2)) => i1.is_assignable_to(i2),
                 (TypeInfo::ErrorUnion(e1, o1), TypeInfo::ErrorUnion(e2, o2)) => {
                     let err_ok = match (e1, e2) {
@@ -258,6 +263,11 @@ impl TypeInfo {
                 _ => std::mem::discriminant(self) == std::mem::discriminant(target),
             }
         } else {
+            if self.is_nil() {
+                if target.is_optional() || target.is_pointer() || target.is_noret() {
+                    return true;
+                }
+            }
             if let TypeInfo::Optional(inner) = target {
                 return self.is_assignable_to(inner);
             }
@@ -314,6 +324,10 @@ pub fn resolve_ast_type(
                 }
             });
             Ok(TypeInfo::Array(Box::new(inner_type), size_val))
+        }
+        ast::Type::Slice(inner) => {
+            let inner_type = resolve_ast_type(inner, resolve_named)?;
+            Ok(TypeInfo::Array(Box::new(inner_type), None))
         }
         ast::Type::Fn(params, ret) => {
             let resolved_params: Vec<TypeInfo> = params

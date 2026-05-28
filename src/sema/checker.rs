@@ -1415,6 +1415,9 @@ fn ast_type_to_typeinfo(t: &Type) -> TypeInfo {
             });
             TypeInfo::Array(Box::new(ast_type_to_typeinfo(inner)), sz)
         }
+        Type::Slice(inner) => {
+            TypeInfo::Array(Box::new(ast_type_to_typeinfo(inner)), None)
+        }
         Type::Fn(params, ret) => {
             let ps: Vec<TypeInfo> = params.iter().map(ast_type_to_typeinfo).collect();
             let r = ast_type_to_typeinfo(ret);

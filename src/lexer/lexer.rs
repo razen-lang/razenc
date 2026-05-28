@@ -791,6 +791,62 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
+            // Multi-character @ tokens: @vec, @map, @set
+            if ch == '@' && pos + 1 < len {
+                let next = chars[pos + 1];
+                if next == 'v'
+                    && pos + 3 < len
+                    && chars[pos + 2] == 'e'
+                    && chars[pos + 3] == 'c'
+                {
+                    let end_byte = self.byte_offset_of(pos + 4, &chars);
+                    result.push(Token::new(
+                        TokenKind::AtVec,
+                        "@vec".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 4;
+                    col += 4;
+                    continue;
+                }
+                if next == 'm'
+                    && pos + 3 < len
+                    && chars[pos + 2] == 'a'
+                    && chars[pos + 3] == 'p'
+                {
+                    let end_byte = self.byte_offset_of(pos + 4, &chars);
+                    result.push(Token::new(
+                        TokenKind::AtMap,
+                        "@map".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 4;
+                    col += 4;
+                    continue;
+                }
+                if next == 's'
+                    && pos + 3 < len
+                    && chars[pos + 2] == 'e'
+                    && chars[pos + 3] == 't'
+                {
+                    let end_byte = self.byte_offset_of(pos + 4, &chars);
+                    result.push(Token::new(
+                        TokenKind::AtSet,
+                        "@set".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 4;
+                    col += 4;
+                    continue;
+                }
+            }
+
             // Single-character tokens
             let single = match ch {
                 '+' => TokenKind::Plus,

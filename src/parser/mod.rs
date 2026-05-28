@@ -59,6 +59,7 @@ impl Parser {
 
         self.skip_comments();
         while self.pos < self.tokens.len() {
+            println!("[DEBUG] parse loop: pos={}, token={:?}", self.pos, self.tokens.get(self.pos));
             match self.parse_decl() {
                 Ok(d) => decls.push(d),
                 Err(e) => {
@@ -199,7 +200,11 @@ impl Parser {
         if self.consume_if(TokenKind::ColonColon) {
             self.parse_const_like(name, generics, pub_, ext, attrs)
         } else if self.consume_if(TokenKind::ColonEquals) {
-            self.parse_var_like(name, mut_, pub_, attrs)
+            if self.check(TokenKind::Fn) {
+                self.parse_var_fn_decl(name, mut_, pub_, attrs)
+            } else {
+                self.parse_var_like(name, mut_, pub_, attrs)
+            }
         } else if self.consume_if(TokenKind::Colon) {
             self.parse_explicit_type_decl(name, mut_, pub_, attrs)
         } else {
@@ -407,6 +412,57 @@ impl Parser {
         }))
     }
 
+    fn parse_var_fn_decl(
+        &mut self,
+        name: String,
+        mut_: bool,
+        pub_: bool,
+        attrs: Vec<Annotation>,
+    ) -> PResult<Decl> {
+        self.advance(); // consume 'fn'
+        self.expect(TokenKind::LeftParen)?;
+        let params = self.parse_fn_params()?;
+        self.expect(TokenKind::RightParen)?;
+
+        let return_ = if self.consume_if(TokenKind::Arrow) {
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+
+        let body = if self.consume_if(TokenKind::LeftBrace) {
+            Some(self.parse_block_contents()?)
+        } else {
+            self.expect_newline_or_semi();
+            None
+        };
+
+        let fn_type = Type::Fn(
+            params.iter().map(|p| p.type_.clone()).collect(),
+            Box::new(return_.clone().unwrap_or(Type::Primitive(TokenKind::Void))),
+        );
+
+        Ok(Decl::Var(VarDecl {
+            name: name.clone(),
+            mutable: mut_,
+            pub_,
+            attrs: attrs.clone(),
+            type_: Some(fn_type),
+            value: Some(Expr::Fn(FnDecl {
+                name,
+                generics: Vec::new(),
+                pub_,
+                external: false,
+                attrs,
+                params,
+                return_,
+                body,
+                is_const: false,
+                is_variable_fn: true,
+            })),
+        }))
+    }
+
     fn parse_explicit_type_decl(
         &mut self,
         name: String,
@@ -477,6 +533,8 @@ impl Parser {
             params,
             return_,
             body,
+            is_const: true,
+            is_variable_fn: false,
         }))
     }
 
@@ -777,6 +835,8 @@ impl Parser {
             params,
             return_,
             body,
+            is_const: true,
+            is_variable_fn: false,
         })
     }
 
@@ -809,6 +869,16 @@ impl Parser {
             // Handle @vec[T], @set[T], @map{K,V} syntax
             if self.consume_if(TokenKind::LeftBracket) {
                 let inner = self.parse_type()?;
+                if self.consume_if(TokenKind::Semicolon) {
+                    let size = self.parse_expr()?;
+                    self.expect(TokenKind::RightBracket)?;
+                    return Ok(Type::Builtin(format!(
+                        "{}[{}; {}]",
+                        name,
+                        type_to_label(&inner),
+                        expr_label(&size)
+                    )));
+                }
                 self.expect(TokenKind::RightBracket)?;
                 return Ok(Type::Builtin(format!(
                     "{}[{}]",
@@ -833,6 +903,79 @@ impl Parser {
                 )));
             }
             return Ok(Type::Builtin(name));
+        }
+        if self.consume_if(TokenKind::AtVec) {
+            if self.consume_if(TokenKind::LeftBracket) {
+                let inner = self.parse_type()?;
+                if self.consume_if(TokenKind::Semicolon) {
+                    let size = self.parse_expr()?;
+                    self.expect(TokenKind::RightBracket)?;
+                    return Ok(Type::Builtin(format!(
+                        "@vec[{}; {}]",
+                        type_to_label(&inner),
+                        expr_label(&size)
+                    )));
+                }
+                self.expect(TokenKind::RightBracket)?;
+                return Ok(Type::Builtin(format!(
+                    "@vec[{}]",
+                    type_to_label(&inner)
+                )));
+            }
+            return Ok(Type::Builtin("@vec".into()));
+        }
+        if self.consume_if(TokenKind::AtMap) {
+            if self.consume_if(TokenKind::LeftBrace) {
+                let mut types = Vec::new();
+                loop {
+                    types.push(self.parse_type()?);
+                    if !self.consume_if(TokenKind::Comma) {
+                        break;
+                    }
+                }
+                self.expect(TokenKind::RightBrace)?;
+                let inner_str: Vec<String> = types.iter().map(type_to_label).collect();
+                return Ok(Type::Builtin(format!(
+                    "@map{{{}}}",
+                    inner_str.join(", ")
+                )));
+            }
+            return Ok(Type::Builtin("@map".into()));
+        }
+        if self.consume_if(TokenKind::AtSet) {
+            if self.consume_if(TokenKind::LeftBracket) {
+                let inner = self.parse_type()?;
+                if self.consume_if(TokenKind::Semicolon) {
+                    let size = self.parse_expr()?;
+                    self.expect(TokenKind::RightBracket)?;
+                    return Ok(Type::Builtin(format!(
+                        "@set[{}; {}]",
+                        type_to_label(&inner),
+                        expr_label(&size)
+                    )));
+                }
+                self.expect(TokenKind::RightBracket)?;
+                return Ok(Type::Builtin(format!(
+                    "@set[{}]",
+                    type_to_label(&inner)
+                )));
+            }
+            if self.consume_if(TokenKind::LeftBrace) {
+                let mut types = Vec::new();
+                loop {
+                    types.push(self.parse_type()?);
+                    if !self.consume_if(TokenKind::Comma) {
+                        break;
+                    }
+                }
+                self.expect(TokenKind::RightBrace)?;
+                let inner_str: Vec<String> = types.iter().map(type_to_label).collect();
+                return Ok(Type::Builtin(format!(
+                    "@set{{{}}}",
+                    inner_str.join(", ")
+                )));
+            }
+            return Ok(Type::Builtin("@set".into()));
         }
         if self.consume_if(TokenKind::Fn) {
             return self.parse_fn_type();
@@ -904,7 +1047,10 @@ impl Parser {
             None
         };
         self.expect(TokenKind::RightBracket)?;
-        Ok(Type::Array(Box::new(inner), size))
+        match size {
+            Some(s) => Ok(Type::Array(Box::new(inner), Some(s))),
+            None => Ok(Type::Slice(Box::new(inner))),
+        }
     }
 
     pub fn parse_expr(&mut self) -> PResult<Expr> {
@@ -1114,6 +1260,8 @@ impl Parser {
                     params,
                     return_,
                     body: Some(body),
+                    is_const: true,
+                    is_variable_fn: false,
                 }));
             }
             Some(TokenKind::Ret) => {
@@ -1183,6 +1331,24 @@ impl Parser {
                     self.expect_ident()?
                 };
                 let mut expr = Expr::Ident(format!("@{}", name));
+                expr = self.parse_postfix(expr)?;
+                Ok(expr)
+            }
+            Some(t) if t.kind == TokenKind::AtVec => {
+                self.advance();
+                let mut expr = Expr::Ident("@vec".into());
+                expr = self.parse_postfix(expr)?;
+                Ok(expr)
+            }
+            Some(t) if t.kind == TokenKind::AtMap => {
+                self.advance();
+                let mut expr = Expr::Ident("@map".into());
+                expr = self.parse_postfix(expr)?;
+                Ok(expr)
+            }
+            Some(t) if t.kind == TokenKind::AtSet => {
+                self.advance();
+                let mut expr = Expr::Ident("@set".into());
                 expr = self.parse_postfix(expr)?;
                 Ok(expr)
             }
@@ -1291,6 +1457,7 @@ impl Parser {
         let mut stmts = Vec::new();
         self.skip_comments();
         while !self.check(TokenKind::RightBrace) && self.pos < self.tokens.len() {
+            println!("[DEBUG]   block loop: pos={}, token={:?}", self.pos, self.tokens.get(self.pos));
             match self.parse_stmt() {
                 Ok(stmt) => stmts.push(stmt),
                 Err(_) => {
@@ -1313,7 +1480,10 @@ impl Parser {
                     return;
                 }
                 Some(TokenKind::RightBrace) => return,
-                Some(TokenKind::RightParen) => return,
+                Some(TokenKind::RightParen) => {
+                    self.advance();
+                    continue;
+                }
                 _ => {
                     self.advance();
                 }
@@ -1858,6 +2028,7 @@ fn type_to_label(t: &Type) -> String {
                 format!("!{}", type_to_label(ok))
             }
         }
+        Type::Slice(inner) => format!("[{}]", type_to_label(inner)),
         Type::Array(inner, size) => {
             if let Some(s) = size {
                 format!("[{}; {}]", type_to_label(inner), expr_label(s))

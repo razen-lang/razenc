@@ -109,6 +109,11 @@ pub enum TokenKind {
     ShiftLeft,
     ShiftRight,
 
+    // Collection Sigils
+    AtVec,
+    AtMap,
+    AtSet,
+
     // Sigils & Special
     ColonEquals,
     ColonColon,
@@ -332,6 +337,11 @@ impl fmt::Display for TokenKind {
             TokenKind::Tilde => write!(f, "~"),
             TokenKind::ShiftLeft => write!(f, "<<"),
             TokenKind::ShiftRight => write!(f, ">>"),
+
+            // Collection Sigils
+            TokenKind::AtVec => write!(f, "@vec"),
+            TokenKind::AtMap => write!(f, "@map"),
+            TokenKind::AtSet => write!(f, "@set"),
 
             // Sigils & Special
             TokenKind::ColonEquals => write!(f, ":="),

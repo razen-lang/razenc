@@ -20,6 +20,8 @@ mod tests {
             params,
             return_,
             body: Some(body),
+            is_const: true,
+            is_variable_fn: false,
         })
     }
 
@@ -387,6 +389,8 @@ mod tests {
             params: vec![],
             return_: Some(Type::Primitive(TokenKind::I32)),
             body: Some(block(vec![ret_expr(lit_i32(0))])),
+            is_const: true,
+            is_variable_fn: false,
         });
 
         // Calling make() without explicit generic args:

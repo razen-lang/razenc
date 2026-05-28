@@ -39,6 +39,8 @@ pub struct FnDecl {
     pub params: Vec<Param>,
     pub return_: Option<Type>,
     pub body: Option<Block>,
+    pub is_const: bool,
+    pub is_variable_fn: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +135,7 @@ pub enum Type {
     Pointer(Box<Type>),
     Optional(Box<Type>),
     ErrorUnion(Option<Box<Type>>, Box<Type>),
+    Slice(Box<Type>),
     Array(Box<Type>, Option<Box<Expr>>),
     Fn(Vec<Type>, Box<Type>),
     Builtin(String),

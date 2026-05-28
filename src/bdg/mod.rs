@@ -148,6 +148,9 @@ fn kind_color(kind: &TokenKind) -> &'static str {
         | TokenKind::Semicolon
         | TokenKind::Underscore => GREY,
 
+        // Collection sigils => cyan
+        TokenKind::AtVec | TokenKind::AtMap | TokenKind::AtSet => CYAN,
+
         // Grouping => grey
         TokenKind::LeftParen
         | TokenKind::RightParen
@@ -807,6 +810,7 @@ fn type_str(t: &Type) -> String {
                 format!("!{}", type_str(ok))
             }
         }
+        Type::Slice(inner) => format!("[{}]", type_str(inner)),
         Type::Array(inner, size) => {
             if let Some(s) = size {
                 format!("[{}; {}]", type_str(inner), expr_short_str(s))
