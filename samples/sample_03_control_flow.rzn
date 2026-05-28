@@ -1,0 +1,34 @@
+// Sample 3: Control Flow — Loops, Match, Defer, Ret
+
+use std.fmt
+
+factorial :: fn(n: i32) -> i32 {
+    mut result := 1
+    mut i := 1
+    loop i <= n {
+        result = result * i
+        i = i + 1
+    }
+    ret result
+}
+
+classify :: fn(x: i32) -> str {
+    ret match x {
+        0 => "zero",
+        1 => "one",
+        2 => "two",
+        _ => "many",
+    }
+}
+
+main :: fn() -> void {
+    val := 5
+    fact := factorial(val)
+    @compileLog("factorial(", val, "): ", fact)
+
+    label := classify(2)
+    @compileLog("classify(2): ", label)
+
+    label2 := classify(10)
+    @compileLog("classify(10): ", label2)
+}

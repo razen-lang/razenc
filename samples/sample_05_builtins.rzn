@@ -1,0 +1,31 @@
+// Sample 5: Builtins, Type Operators, References, Compound Assign
+
+use std.fmt
+
+main :: fn() -> void {
+    x := 42
+    t := @TypeOf(x)
+    s := @SizeOf(i32)
+    @compileLog("TypeOf(x): ", t, " SizeOf(i32): ", s)
+
+    alias := @TypeName(i32)
+    @compileLog("TypeName(i32): ", alias)
+
+    casted := @as(f64, 42)
+    @compileLog("as(f64, 42): ", casted)
+
+    mut counter := 0
+    counter += 1
+    counter += 2
+    @compileLog("counter after +=: ", counter)
+
+    a := 10
+    b := 20
+    eq := a == b
+    lt := a < b
+    @compileLog("eq: ", eq, " lt: ", lt)
+
+    bit_and := a & b
+    bit_or := a | b
+    @compileLog("bit_and: ", bit_and, " bit_or: ", bit_or)
+}

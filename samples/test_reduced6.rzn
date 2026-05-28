@@ -1,4 +1,0 @@
-// test
-ternary_if :: fn(x: i32) -> i32 {
-    ret if true {1} else {0}
-}

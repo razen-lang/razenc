@@ -1,0 +1,57 @@
+// Sample 4: Data Types — Structs, Enums, Unions, Error Sets, Behaviours
+
+use std.fmt
+
+Age :: type(u8)
+
+Describable :: behave {
+    describe :: fn(self: &@Self) -> void
+}
+
+User :: struct ~> Describable {
+    name: str,
+    age: Age,
+    email: str,
+
+    describe :: fn(self: &User) -> void {
+        @compileLog("User: ", self.name)
+    }
+}
+
+Color :: enum {
+    Red,
+    Green,
+    Blue,
+}
+
+HttpStatus :: enum {
+    Ok = 200,
+    Not_Found = 404,
+    Error = 500,
+}
+
+Value :: union {
+    i: i64,
+    f: f64,
+    s: str,
+}
+
+MathError :: error {
+    Division_By_Zero,
+    Overflow,
+    Negative_Input,
+}
+
+main :: fn() -> void {
+    user := User{ name: "Alice", age: 30, email: "alice@test.com" }
+    @compileLog("user name: ", user.name)
+
+    c := Color.Red
+    @compileLog("color: ", c)
+
+    status := HttpStatus.Ok
+    @compileLog("status: ", status)
+
+    val := Value{ i: 42 }
+    @compileLog("value int: ", val.i)
+}

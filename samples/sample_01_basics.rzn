@@ -1,0 +1,35 @@
+// Sample 1: Variables, Constants, Types, Math, If/Else
+
+use std.fmt
+
+Age :: type(u8)
+Score :: type(f64)
+
+APP_NAME : str : "Razen Sample"
+PI : f64 : 3.14159
+MAX_BUF : usize : 4096
+
+main :: fn() -> void {
+    x := 42
+    y : i32 = 10
+    mut z := 5
+    z = z + 1
+
+    result := x + y * 2
+
+    if result > 50 {
+        @compileLog("result is large")
+    } else if result > 0 {
+        @compileLog("result is positive")
+    } else {
+        @compileLog("result is zero or negative")
+    }
+
+    flag := true
+
+    if flag {
+        @compileLog("flag is true")
+    }
+
+    is_zero := result == 0
+}
