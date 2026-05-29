@@ -48,12 +48,14 @@ pub fn run() {
     }
 }
 
-fn build_log_path(file_path: &PathBuf) -> PathBuf {
+fn build_log_path(file_path: &std::path::Path) -> PathBuf {
     let stem = file_path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("output");
-    let parent = file_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let parent = file_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
     parent.join(format!("{}.log", stem))
 }
 
@@ -77,7 +79,9 @@ fn run_to_string(file_path: &PathBuf, verbose: bool, phase: Option<u8>) -> Strin
         .and_then(|s| s.to_str())
         .unwrap_or("source");
 
-    if verbose {
+    // Only show source dump + lexer output when phase 1 is the target (or no phase specified)
+    let show_lexer = phase != Some(2) && phase != Some(3) && phase != Some(4);
+    if verbose && show_lexer {
         buf.push_str(&format_source(&source, file_stem));
         buf.push_str("Phase 1  Parsing\t\tDone\n\n");
     }
@@ -95,7 +99,7 @@ fn run_to_string(file_path: &PathBuf, verbose: bool, phase: Option<u8>) -> Strin
         }
     }
 
-    if verbose {
+    if verbose && show_lexer {
         buf.push_str(&format!("\nTokens ({})\n", token_result.tokens.len()));
         buf.push_str(&format_tokens(&token_result.tokens));
         buf.push_str("\n\t\tLexer\t\tDone\n");
@@ -191,7 +195,9 @@ fn process_file(file_path: &PathBuf, verbose: bool, phase: Option<u8>) {
         .and_then(|s| s.to_str())
         .unwrap_or("source");
 
-    if verbose {
+    // Only show source dump + lexer output when phase 1 is the target (or no phase specified)
+    let show_lexer = phase != Some(2) && phase != Some(3) && phase != Some(4);
+    if verbose && show_lexer {
         crate::bdg::print_source(&source, file_stem);
         crate::bdg::print_phase_header("Parsing", "Done");
     }
@@ -209,7 +215,7 @@ fn process_file(file_path: &PathBuf, verbose: bool, phase: Option<u8>) {
         }
     }
 
-    if verbose {
+    if verbose && show_lexer {
         crate::bdg::print_token_count(token_result.tokens.len());
         crate::bdg::print_tokens(&token_result.tokens);
         crate::bdg::print_footer("Lexer\t\tDone");
@@ -382,7 +388,11 @@ fn format_ir(ir_program: &crate::ir::IrProgram) -> String {
     for func in &ir_program.functions {
         buf.push_str(&format!("\nFunction: {}\n", func.name));
         if !func.params.is_empty() {
-            let params: Vec<String> = func.params.iter().map(|(n, t)| format!("{}: {:?}", n, t)).collect();
+            let params: Vec<String> = func
+                .params
+                .iter()
+                .map(|(n, t)| format!("{}: {:?}", n, t))
+                .collect();
             buf.push_str(&format!("  params: {}\n", params.join(", ")));
         }
         if let Some(ref rt) = func.return_type {
@@ -398,7 +408,11 @@ fn format_ir(ir_program: &crate::ir::IrProgram) -> String {
     if !ir_program.globals.is_empty() {
         buf.push_str("\nGlobals:\n");
         for g in &ir_program.globals {
-            let init_str = g.init.as_ref().map(|v| format!(" = {}", v)).unwrap_or_default();
+            let init_str = g
+                .init
+                .as_ref()
+                .map(|v| format!(" = {}", v))
+                .unwrap_or_default();
             buf.push_str(&format!("  {}{}\n", g.name, init_str));
         }
     }
@@ -418,13 +432,13 @@ fn format_parse_error(source: &str, file_stem: &str, err: &crate::parser::ParseE
     if err.line > 0 {
         buf.push_str(&format!("  --> {}:{}:{}\n", file_stem, err.line, err.col));
         if let Some(source_line) = source.lines().nth(err.line - 1) {
-            buf.push_str(&format!("  |\n"));
+            buf.push_str("  |\n");
             buf.push_str(&format!("  | {}\n", source_line));
             let mut caret = String::with_capacity(err.col.saturating_sub(1) + 5);
             caret.push_str(&" ".repeat(4));
             caret.push(' ');
             caret.push_str(&" ".repeat(err.col.saturating_sub(1)));
-            caret.push_str("^");
+            caret.push('^');
             buf.push_str(&format!("  {}\n", caret));
         }
     }

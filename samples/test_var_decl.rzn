@@ -1,0 +1,43 @@
+// Test: Variable Declaration and Assignment
+
+main :: fn() -> void {
+    // Inferred type
+    x := 10
+    @compileLog("inferred var x: ", x)
+
+    // Explicit type
+    y : i32 = 20
+    @compileLog("explicit var y: ", y)
+
+    // Mutable inferred
+    mut a := 100
+    @compileLog("mut var a (before): ", a)
+    a = 200
+    @compileLog("mut var a (after): ", a)
+
+    // Mutable explicit type
+    mut b : f64 = 3.14
+    @compileLog("mut explicit var b (before): ", b)
+    b = 6.28
+    @compileLog("mut explicit var b (after): ", b)
+
+    // Bool var
+    flag := true
+    @compileLog("bool var flag: ", flag)
+
+    // String var
+    name : str = "razen"
+    @compileLog("string var name: ", name)
+
+    // Float var
+    pi := 3.14159
+    @compileLog("float var pi: ", pi)
+
+    // Assigned from expression
+    sum := x + y
+    @compileLog("sum of x + y: ", sum)
+
+    // Assigned from another variable
+    copy := x
+    @compileLog("copy of x: ", copy)
+}

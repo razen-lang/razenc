@@ -1,0 +1,36 @@
+// Test: Type Declaration and Assignment (Type Aliasing)
+
+// Type alias - basic
+Age :: type(u8)
+Score :: type(f64)
+UserId :: type(i64)
+Label :: type(str)
+
+// Type alias - complex
+BufferSize :: type(usize)
+Flag :: type(bool)
+
+main :: fn() -> void {
+    // Use type alias for variable
+    age : Age = 25
+    @compileLog("age: ", age)
+
+    score : Score = 98.5
+    @compileLog("score: ", score)
+
+    user_id : UserId = 12345
+    @compileLog("user_id: ", user_id)
+
+    label : Label = "player_one"
+    @compileLog("label: ", label)
+
+    buf_size : BufferSize = 4096
+    @compileLog("buf_size: ", buf_size)
+
+    active : Flag = true
+    @compileLog("active: ", active)
+
+    // Inferred from type alias
+    inferred_age := @as(Age, 30)
+    @compileLog("inferred_age: ", inferred_age)
+}

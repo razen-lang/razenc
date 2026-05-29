@@ -1,0 +1,18 @@
+// inferred const
+MY_CONST :: 123
+
+// Explicit const
+MY_CONST_2 : int : 123
+
+// Inferred Var
+my_var := 123
+// Explicit Var
+my_var2 : int = 123
+
+main :: fn() -> i32 {
+    ret 42
+}
+
+add :: fn(a: int, b: int) -> int {
+    ret a + b
+}

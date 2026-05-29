@@ -59,11 +59,6 @@ impl Parser {
 
         self.skip_comments();
         while self.pos < self.tokens.len() {
-            println!(
-                "[DEBUG] parse loop: pos={}, token={:?}",
-                self.pos,
-                self.tokens.get(self.pos)
-            );
             match self.parse_decl() {
                 Ok(d) => decls.push(d),
                 Err(e) => {
@@ -972,6 +967,40 @@ impl Parser {
         if self.consume_if(TokenKind::Fn) {
             return self.parse_fn_type();
         }
+        if self.consume_if(TokenKind::Type) {
+            self.expect(TokenKind::LeftParen)?;
+            let inner = self.parse_type()?;
+            self.expect(TokenKind::RightParen)?;
+            return Ok(Type::Builtin(format!("type({})", type_to_label(&inner))));
+        }
+        if self.consume_if(TokenKind::AtStr) {
+            if self.consume_if(TokenKind::Dot) {
+                let method = self.expect_ident()?;
+                if self.consume_if(TokenKind::LeftParen) {
+                    let mut args = Vec::new();
+                    loop {
+                        if self.check(TokenKind::RightParen) {
+                            break;
+                        }
+                        args.push(self.parse_type()?);
+                        if !self.consume_if(TokenKind::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect(TokenKind::RightParen)?;
+                    return Ok(Type::Builtin(format!(
+                        "@str.{}({})",
+                        method,
+                        args.iter()
+                            .map(type_to_label)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )));
+                }
+                return Ok(Type::Builtin(format!("@str.{}", method)));
+            }
+            return Ok(Type::Builtin("@str".into()));
+        }
         if self.consume_if(TokenKind::LeftBracket) {
             return self.parse_array_type();
         }
@@ -990,12 +1019,39 @@ impl Parser {
 
         if self.peek_kind() == Some(TokenKind::Identifier) {
             let name = self.expect_ident()?;
+            // Handle generic type arguments: Result<T, E>
+            let generics = if self.consume_if(TokenKind::Less) {
+                let mut args = Vec::new();
+                loop {
+                    args.push(self.parse_type()?);
+                    if !self.consume_if(TokenKind::Comma) {
+                        break;
+                    }
+                }
+                self.expect(TokenKind::Greater)?;
+                Some(args)
+            } else {
+                None
+            };
             if self.consume_if(TokenKind::Bang) {
                 let ok = self.parse_type()?;
-                return Ok(Type::ErrorUnion(
-                    Some(Box::new(Type::Named(name))),
-                    Box::new(ok),
-                ));
+                let base = if let Some(g) = generics {
+                    Type::Builtin(format!(
+                        "{}<{}>",
+                        name,
+                        g.iter().map(type_to_label).collect::<Vec<_>>().join(", ")
+                    ))
+                } else {
+                    Type::Named(name)
+                };
+                return Ok(Type::ErrorUnion(Some(Box::new(base)), Box::new(ok)));
+            }
+            if let Some(g) = generics {
+                return Ok(Type::Builtin(format!(
+                    "{}<{}>",
+                    name,
+                    g.iter().map(type_to_label).collect::<Vec<_>>().join(", ")
+                )));
             }
             return Ok(Type::Named(name));
         }
@@ -1290,6 +1346,14 @@ impl Parser {
                 };
                 return Ok(Expr::Ret(value));
             }
+            Some(TokenKind::Stop) => {
+                self.advance();
+                return Ok(Expr::Stop);
+            }
+            Some(TokenKind::Next) => {
+                self.advance();
+                return Ok(Expr::Next);
+            }
             Some(TokenKind::LeftBrace) => {
                 self.advance();
                 let block = self.parse_block_contents()?;
@@ -1350,27 +1414,107 @@ impl Parser {
                 } else {
                     self.expect_ident()?
                 };
+                // @comptime { expr } or @comptime expr
+                if name == "comptime" {
+                    if self.check(TokenKind::LeftBrace) {
+                        self.advance();
+                        let block = self.parse_block_contents()?;
+                        return Ok(Expr::Block(block));
+                    }
+                    let expr = self.parse_expr()?;
+                    return Ok(expr);
+                }
                 let mut expr = Expr::Ident(format!("@{}", name));
                 expr = self.parse_postfix(expr)?;
                 Ok(expr)
             }
             Some(t) if t.kind == TokenKind::AtVec => {
                 self.advance();
+                if self.consume_if(TokenKind::LeftBracket) {
+                    if self.check(TokenKind::RightBracket) {
+                        self.advance();
+                        return Ok(Expr::ArrayInit(Vec::new()));
+                    }
+                    let first = self.parse_expr()?;
+                    if self.consume_if(TokenKind::Semicolon) {
+                        let count = self.parse_expr()?;
+                        self.expect(TokenKind::RightBracket)?;
+                        return Ok(Expr::ArrayInitFill(Box::new(first), Box::new(count)));
+                    }
+                    let mut elems = vec![first];
+                    while self.consume_if(TokenKind::Comma) {
+                        if self.check(TokenKind::RightBracket) {
+                            break;
+                        }
+                        elems.push(self.parse_expr()?);
+                    }
+                    self.expect(TokenKind::RightBracket)?;
+                    return Ok(Expr::ArrayInit(elems));
+                }
                 let mut expr = Expr::Ident("@vec".into());
                 expr = self.parse_postfix(expr)?;
                 Ok(expr)
             }
             Some(t) if t.kind == TokenKind::AtMap => {
                 self.advance();
+                if self.consume_if(TokenKind::LeftBrace) {
+                    let mut pairs = Vec::new();
+                    self.skip_comments();
+                    while !self.check(TokenKind::RightBrace) && self.pos < self.tokens.len() {
+                        let key = self.parse_expr()?;
+                        self.expect(TokenKind::Colon)?;
+                        let value = self.parse_expr()?;
+                        pairs.push((key, value));
+                        self.consume_if(TokenKind::Comma);
+                        self.skip_comments();
+                    }
+                    self.expect(TokenKind::RightBrace)?;
+                    return Ok(Expr::MapLiteral(pairs));
+                }
                 let mut expr = Expr::Ident("@map".into());
                 expr = self.parse_postfix(expr)?;
                 Ok(expr)
             }
             Some(t) if t.kind == TokenKind::AtSet => {
                 self.advance();
+                if self.consume_if(TokenKind::LeftBrace) {
+                    let mut elems = Vec::new();
+                    self.skip_comments();
+                    while !self.check(TokenKind::RightBrace) && self.pos < self.tokens.len() {
+                        elems.push(self.parse_expr()?);
+                        self.consume_if(TokenKind::Comma);
+                        self.skip_comments();
+                    }
+                    self.expect(TokenKind::RightBrace)?;
+                    return Ok(Expr::ArrayInit(elems));
+                }
+                if self.consume_if(TokenKind::LeftBracket) {
+                    let inner = self.parse_type()?;
+                    if self.consume_if(TokenKind::Semicolon) {
+                        let size = self.parse_expr()?;
+                        self.expect(TokenKind::RightBracket)?;
+                        return Ok(Expr::Ident(format!(
+                            "@set[{}; {}]",
+                            type_to_label(&inner),
+                            expr_label(&size)
+                        )));
+                    }
+                    self.expect(TokenKind::RightBracket)?;
+                    return Ok(Expr::Ident(format!("@set[{}]", type_to_label(&inner))));
+                }
                 let mut expr = Expr::Ident("@set".into());
                 expr = self.parse_postfix(expr)?;
                 Ok(expr)
+            }
+            Some(t) if t.kind == TokenKind::AtStr => {
+                self.advance();
+                let mut expr = Expr::Ident("@str".into());
+                expr = self.parse_postfix(expr)?;
+                Ok(expr)
+            }
+            Some(t) if t.kind == TokenKind::Pipe => {
+                self.advance();
+                Ok(Expr::Ident("|".into()))
             }
             Some(t) if is_type_keyword(&t.kind) => {
                 self.advance();
@@ -1393,6 +1537,69 @@ impl Parser {
 
     fn parse_postfix(&mut self, mut lhs: Expr) -> PResult<Expr> {
         loop {
+            // Handle generic type arguments: fn_name<T>(args) or Name<T>{...}
+            if self.peek_kind() == Some(TokenKind::Less) {
+                if let Expr::Ident(_) = &lhs {
+                    // Look ahead to see if this is <Type, ...> followed by ( or {
+                    let saved_pos = self.pos;
+                    self.advance(); // consume <
+                    let mut depth = 1u32;
+                    let mut ok = true;
+                    while depth > 0 && self.pos < self.tokens.len() {
+                        match self.peek_kind() {
+                            Some(TokenKind::Less) => depth += 1,
+                            Some(TokenKind::Greater) => {
+                                depth -= 1;
+                                if depth == 0 {
+                                    self.advance(); // advance past >
+                                    break;
+                                }
+                            }
+                            Some(TokenKind::Eof) => {
+                                ok = false;
+                                break;
+                            }
+                            _ => {}
+                        }
+                        self.advance();
+                    }
+                    if ok
+                        && depth == 0
+                        && matches!(
+                            self.peek_kind(),
+                            Some(TokenKind::LeftParen) | Some(TokenKind::LeftBrace)
+                        )
+                    {
+                        // This is a generic call: name<T>(args)
+                        // Re-parse the type arguments
+                        // We already consumed < and scanned to >
+                        // Now re-parse properly
+                        self.pos = saved_pos + 1; // after <
+                        let mut generic_args = Vec::new();
+                        loop {
+                            generic_args.push(self.parse_type()?);
+                            if !self.consume_if(TokenKind::Comma) {
+                                break;
+                            }
+                        }
+                        self.expect(TokenKind::Greater)?;
+                        // Wrap the ident with generic info
+                        if let Expr::Ident(name) = lhs {
+                            lhs = Expr::Ident(format!(
+                                "{}<{}>",
+                                name,
+                                generic_args
+                                    .iter()
+                                    .map(type_to_label)
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
+                            ));
+                        }
+                    } else {
+                        self.pos = saved_pos;
+                    }
+                }
+            }
             if self.consume_if(TokenKind::LeftParen) {
                 let mut args = Vec::new();
                 loop {
@@ -1477,11 +1684,6 @@ impl Parser {
         let mut stmts = Vec::new();
         self.skip_comments();
         while !self.check(TokenKind::RightBrace) && self.pos < self.tokens.len() {
-            println!(
-                "[DEBUG]   block loop: pos={}, token={:?}",
-                self.pos,
-                self.tokens.get(self.pos)
-            );
             match self.parse_stmt() {
                 Ok(stmt) => stmts.push(stmt),
                 Err(_) => {
@@ -1838,13 +2040,14 @@ impl Parser {
             return Ok(Pattern::Literal(t.kind.clone(), t.value.clone()));
         }
         if self.peek_kind() == Some(TokenKind::Identifier) {
+            let saved_pos = self.pos;
             let name = self.advance().unwrap().value.clone();
             if self.consume_if(TokenKind::Dot) {
                 let variant = self.expect_ident()?;
                 let capture = self.parse_single_capture();
                 return Ok(Pattern::EnumVariant(name, variant, capture));
             }
-            self.pos -= 1;
+            self.pos = saved_pos;
             let name2 = self.expect_ident()?;
             return Ok(Pattern::Ident(name2));
         }

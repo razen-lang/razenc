@@ -1,0 +1,24 @@
+// Test: Constant Declaration and Assignment (Comptime)
+
+// Inferred type constant
+MY_CONST :: 42
+COMPUTED :: 10 + 20
+
+// Explicit type constant
+EXPLICIT_CONST : i32 : 100
+PI_VAL : f64 : 3.14159
+MSG : str : "hello razeN"
+
+// SCREAMING_SNAKE_CASE convention
+MAX_SIZE : usize : 1024
+IS_ACTIVE : bool : true
+
+main :: fn() -> void {
+    @compileLog("inferred const MY_CONST: ", MY_CONST)
+    @compileLog("computed const COMPUTED: ", COMPUTED)
+    @compileLog("explicit const EXPLICIT_CONST: ", EXPLICIT_CONST)
+    @compileLog("explicit const PI_VAL: ", PI_VAL)
+    @compileLog("explicit const MSG: ", MSG)
+    @compileLog("explicit const MAX_SIZE: ", MAX_SIZE)
+    @compileLog("explicit const IS_ACTIVE: ", IS_ACTIVE)
+}

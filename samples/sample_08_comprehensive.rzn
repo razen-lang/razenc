@@ -1,0 +1,314 @@
+// Sample 8: Comprehensive — Exercises all implemented compiler phases
+// Covers: variables, constants, functions, structs, enums, unions,
+//         error sets, behaviours, control flow, builtins, references,
+//         optionals, error unions, loops, match, try-catch
+
+// ---- Type Aliases ----
+Age :: type(u8)
+Score :: type(f64)
+
+// ---- Constants ----
+PI : f64 : 3.14159
+MAX_SCORE : i32 : 100
+GREETING : str : "hello"
+
+// ---- Behaviour (Trait) ----
+Describable :: behave {
+    describe :: fn(self: &@Self) -> void
+}
+
+// ---- Struct implementing Behaviour ----
+Point :: struct ~> Describable {
+    pub x: f64,
+    pub y: f64,
+
+    pub draw :: fn(self: &Point) -> void {
+        @compileLog("Point(", self.x, ", ", self.y, ")")
+    }
+
+    pub describe :: fn(self: &Point) -> void {
+        @compileLog("A point at x=", self.x, " y=", self.y)
+    }
+
+    pub distance :: fn(self: &Point, other: &Point) -> f64 {
+        dx := other.x - self.x
+        dy := other.y - self.y
+        ret dx * dx + dy * dy
+    }
+}
+
+// ---- Plain Struct ----
+Person :: struct {
+    pub name: str,
+    pub age: i32,
+    pub active: bool,
+}
+
+// ---- Enum ----
+Direction :: enum {
+    North,
+    South,
+    East,
+    West,
+}
+
+Status :: enum {
+    Ok = 200,
+    NotFound = 404,
+    Error = 500,
+}
+
+// ---- Union ----
+Value :: union {
+    i: i64,
+    f: f64,
+    s: str,
+}
+
+// ---- Error Set ----
+MathError :: error {
+    Division_By_Zero,
+    Overflow,
+    Negative_Sqrt,
+}
+
+// ---- Functions with various parameter styles ----
+add :: fn(a: i32, b: i32) -> i32 {
+    ret a + b
+}
+
+sub :: fn(a: i32, b: i32) -> i32 {
+    ret a - b
+}
+
+mul :: fn(a: i32, b: i32) -> i32 {
+    ret a * b
+}
+
+clamp :: fn(val: i32, lo: i32, hi: i32) -> i32 {
+    if val < lo {
+        ret lo
+    }
+    if val > hi {
+        ret hi
+    }
+    ret val
+}
+
+absolute :: fn(x: i32) -> i32 {
+    if x < 0 {
+        ret -x
+    }
+    ret x
+}
+
+// ---- Generic Functions ----
+identity<T> :: fn(x: T) -> T {
+    ret x
+}
+
+swap<A, B> :: fn(first: A, second: B) -> B {
+    ret second
+}
+
+// ---- Function with mutable param ----
+increment :: fn(mut counter: i32) -> i32 {
+    counter = counter + 1
+    ret counter
+}
+
+// ---- Functions returning error unions ----
+safe_divide :: fn(a: i32, b: i32) -> MathError!i32 {
+    if b == 0 {
+        ret MathError.Division_By_Zero
+    }
+    ret a / b
+}
+
+// ---- Variable function (runtime) ----
+double_it := fn(x: i32) -> i32 {
+    ret x * 2
+}
+
+// ---- Loops ----
+count_to_n :: fn(n: i32) -> i32 {
+    mut sum := 0
+    mut i := 1
+    loop i <= n {
+        sum = sum + i
+        i = i + 1
+    }
+    ret sum
+}
+
+// ---- Match expressions ----
+classify :: fn(x: i32) -> str {
+    ret match x {
+        0 => "zero",
+        1 => "one",
+        2 => "two",
+        _ => "many",
+    }
+}
+
+describe_dir :: fn(d: Direction) -> str {
+    ret match d {
+        Direction.North => "north",
+        Direction.South => "south",
+        Direction.East => "east",
+        Direction.West => "west",
+        _ => "unknown",
+    }
+}
+
+// ---- Struct with methods ----
+Counter :: struct {
+    pub value: i32,
+
+    pub get :: fn(self: &Counter) -> i32 {
+        ret self.value
+    }
+
+    pub add :: fn(self: &Counter, amount: i32) -> i32 {
+        ret self.value + amount
+    }
+}
+
+// ---- Main ----
+main :: fn() -> i32 {
+    // Variable declarations
+    x := 42
+    y : i32 = 10
+    mut z := 5
+    z = z + 1
+
+    // Arithmetic
+    sum := add(x, y)
+    diff := sub(100, 50)
+    product := mul(5, 6)
+    clamped := clamp(200, 0, 100)
+    abs_val := absolute(-17)
+
+    // Generic calls
+    id_val := identity<i32>(42)
+    id_str := identity<str>("hello")
+    swapped := swap<str, i32>("a", 10)
+
+    // Mutable param
+    counter := increment(10)
+
+    // Variable function
+    doubled := double_it(21)
+
+    // Control flow — if/else
+    if sum > 50 {
+        @compileLog("sum is large")
+    } else if sum > 0 {
+        @compileLog("sum is positive")
+    } else {
+        @compileLog("sum is zero or negative")
+    }
+
+    // Control flow — loop
+    fact := count_to_n(5)
+
+    // Match
+    label := classify(2)
+    dir_label := describe_dir(Direction.North)
+
+    // Struct init and method calls
+    origin := Point{ x: 0.0, y: 0.0 }
+    origin.draw()
+
+    other := Point{ x: 3.0, y: 4.0 }
+    dist := origin.distance(&other)
+
+    person := Person{ name: "Alice", age: 30, active: true }
+
+    // Enum
+    dir := Direction.East
+    status := Status.Ok
+
+    // Union
+    val := Value{ i: 42 }
+
+    // Error union
+    result := safe_divide(10, 3)
+    err_result := safe_divide(10, 0)
+
+    // Optional
+    mut maybe: ?i32 = 42
+    nothing: ?i32 = nil
+
+    // Counter struct
+    ctr := Counter{ value: 10 }
+    ctr_val := ctr.get()
+    ctr_add := ctr.add(5)
+
+    // References
+    mut score := 0
+    score_ref := &mut score
+    score_ref.* = 100
+
+    imm_ref := &x
+
+    // Builtin calls
+    t := @TypeOf(x)
+    s := @SizeOf(i32)
+
+    // Compound assignments
+    mut acc := 0
+    acc += 10
+    acc -= 3
+    acc *= 2
+    acc /= 4
+    acc %= 7
+
+    // Bitwise operations
+    flags := 0xFF & 0x0F
+    combined := 0xF0 | 0x0F
+    flipped := 0xFF ^ 0x0F
+    shifted_left := 1 << 4
+    shifted_right := 128 >> 4
+
+    // Logical operations
+    a := true && false
+    b := true || false
+    c := !true
+
+    // Comparison
+    eq := x == y
+    ne := x != y
+    lt := x < y
+    gt := x > y
+    le := x <= y
+    ge := x >= y
+
+    // Array init
+    arr := [1, 2, 3, 4, 5]
+    filled := [0; 10]
+
+    // Block expressions
+    block_val := {
+        temp := 10
+        temp + 5
+    }
+
+    // Paren expressions
+    paren_val := (2 + 3) * 4
+
+    // Try-catch (expression form)
+    try {
+        safe_divide(10, 2)
+    } catch |e| {
+        @compileLog("caught: ", e)
+    }
+
+    // Loop with stop/next
+    mut i := 0
+    loop i < 5 {
+        i = i + 1
+    }
+
+    ret 0
+}

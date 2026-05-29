@@ -2,7 +2,7 @@ use crate::lexer::token::TokenKind;
 
 pub type Span = (usize, usize);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Annotation {
     pub name: String,
     pub args: Vec<Expr>,
@@ -29,7 +29,7 @@ pub enum Decl {
     Test(String, Block),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FnDecl {
     pub name: String,
     pub generics: Vec<String>,
@@ -83,7 +83,7 @@ pub struct BehaveDecl {
     pub methods: Vec<FnDecl>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VarDecl {
     pub name: String,
     pub mutable: bool,
@@ -93,7 +93,7 @@ pub struct VarDecl {
     pub value: Option<Expr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConstDecl {
     pub name: String,
     pub attrs: Vec<Annotation>,
@@ -101,7 +101,7 @@ pub struct ConstDecl {
     pub value: Option<Expr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Param {
     pub name: String,
     pub mutable: bool,
@@ -121,13 +121,13 @@ pub struct EnumVariant {
     pub type_: Option<Type>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FieldInit {
     pub name: String,
     pub value: Expr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Primitive(TokenKind),
     Named(String),
@@ -141,7 +141,7 @@ pub enum Type {
     Builtin(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(TokenKind, String),
     Ident(String),
@@ -160,6 +160,8 @@ pub enum Expr {
     AtMethod(Box<Expr>, String),
     Catch(Box<Expr>, Vec<String>, Box<Block>),
     Ret(Option<Box<Expr>>),
+    Stop,
+    Next,
     Fn(FnDecl),
     MapLiteral(Vec<(Expr, Expr)>),
 }
@@ -217,7 +219,7 @@ pub enum AssignOp {
     ColonEq,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Expr(Expr),
     Var(VarDecl),
@@ -233,7 +235,7 @@ pub enum Stmt {
     Block(Block),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct If {
     pub cond: Expr,
     pub capture: Vec<String>,
@@ -241,41 +243,41 @@ pub struct If {
     pub else_block: Option<Box<Stmt>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Match {
     pub target: Expr,
     pub arms: Vec<MatchArm>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub pattern: Pattern,
     pub capture: Vec<String>,
     pub value: Expr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Loop {
     pub conds: Vec<Expr>,
     pub captures: Vec<Capture>,
     pub body: Block,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TryCatch {
     pub try_body: Block,
     pub capture: Vec<String>,
     pub catch_body: Block,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Capture {
     pub name: String,
     pub mutable: bool,
     pub is_ref: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     Wildcard,
     Ident(String),
@@ -283,7 +285,7 @@ pub enum Pattern {
     EnumVariant(String, String, Option<String>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
 }

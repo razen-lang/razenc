@@ -1,0 +1,44 @@
+// Test: Error Declaration and Assignment
+
+MathError :: error {
+    Division_By_Zero,
+    Overflow,
+    Negative_Sqrt,
+}
+
+IoError :: error {
+    File_Not_Found,
+    Permission_Denied,
+}
+
+safe_divide :: fn(a: i32, b: i32) -> MathError!i32 {
+    if b == 0 {
+        ret MathError.Division_By_Zero
+    }
+    ret a / b
+}
+
+safe_add :: fn(a: i32, b: i32) -> !i32 {
+    ret a + b
+}
+
+read_file :: fn(path: str) -> IoError!str {
+    ret "file contents"
+}
+
+main :: fn() -> void {
+    err := MathError.Division_By_Zero
+    @compileLog("error: ", err)
+
+    result := safe_divide(10, 2)
+    @compileLog("divide result: ", result)
+
+    err_result := safe_divide(10, 0)
+    @compileLog("divide error: ", err_result)
+
+    io_err := IoError.File_Not_Found
+    @compileLog("io error: ", io_err)
+
+    content := read_file("test.txt")
+    @compileLog("file content: ", content)
+}

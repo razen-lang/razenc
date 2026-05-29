@@ -1,0 +1,40 @@
+// Test: Enum Declaration and Assignment
+
+Direction :: enum {
+    North,
+    South,
+    East,
+    West,
+}
+
+HttpStatus :: enum {
+    Ok = 200,
+    NotFound = 404,
+    Error = 500,
+}
+
+Token :: enum {
+    Identifier: str,
+    Number: i64,
+    Eof,
+}
+
+Color :: enum {
+    Red,
+    Green,
+    Blue,
+}
+
+main :: fn() -> void {
+    dir := Direction.North
+    @compileLog("direction: ", dir)
+
+    status := HttpStatus.Ok
+    @compileLog("status: ", status)
+
+    tok := Token.Identifier
+    @compileLog("token: ", tok)
+
+    color := Color.Green
+    @compileLog("color: ", color)
+}

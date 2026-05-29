@@ -1,0 +1,16 @@
+// Test: Union Declaration and Assignment
+
+Value :: union {
+    i: i64,
+    f: f64,
+    s: str,
+}
+
+Number :: union {
+    int_val: i32,
+    float_val: f64,
+}
+
+main :: fn() -> void {
+    @compileLog("union declared")
+}

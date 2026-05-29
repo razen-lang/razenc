@@ -281,7 +281,12 @@ impl IrGenerator {
     }
 
     fn gen_struct(&mut self, s: &StructDecl, ir: &mut IrProgram) {
-        self.push_comment(format!("struct {} ({} fields, {} methods)", s.name, s.fields.len(), s.methods.len()));
+        self.push_comment(format!(
+            "struct {} ({} fields, {} methods)",
+            s.name,
+            s.fields.len(),
+            s.methods.len()
+        ));
         if let Some(ref behave) = s.impl_behave {
             self.push_comment(format!("  implements {}", behave));
         }
@@ -305,7 +310,10 @@ impl IrGenerator {
         }
         for (i, variant) in e.variants.iter().enumerate() {
             if let Some(ref ty) = variant.type_ {
-                self.push_comment(format!("  variant {}: {} (associated data)", i, variant.name));
+                self.push_comment(format!(
+                    "  variant {}: {} (associated data)",
+                    i, variant.name
+                ));
             } else {
                 self.push_comment(format!("  variant {}: {}", i, variant.name));
             }
@@ -330,8 +338,16 @@ impl IrGenerator {
             if method.body.is_some() {
                 self.gen_fn(method, ir);
             } else {
-                self.push_comment(format!("  abstract: {}({})", method.name,
-                    method.params.iter().map(|p| p.name.clone()).collect::<Vec<_>>().join(", ")));
+                self.push_comment(format!(
+                    "  abstract: {}({})",
+                    method.name,
+                    method
+                        .params
+                        .iter()
+                        .map(|p| p.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
         }
     }
@@ -721,12 +737,7 @@ impl IrGenerator {
                         IrValue::ConstInt(0), // variant index will be resolved by backend
                     ));
                     let cmp = self.new_temp();
-                    self.emit(IrInst::BinOp(
-                        IrOp::Eq,
-                        cmp.clone(),
-                        tag_val,
-                        variant_idx,
-                    ));
+                    self.emit(IrInst::BinOp(IrOp::Eq, cmp.clone(), tag_val, variant_idx));
                     let arm_body = self.new_label(&format!("arm{}", i));
                     if i + 1 < m.arms.len() {
                         let next_check = self.new_label(&format!("arm_cond{}", i + 1));
@@ -750,13 +761,12 @@ impl IrGenerator {
                     self.emit(IrInst::Alloca(local.clone()));
                     self.emit(IrInst::Store(target.clone(), local));
                 }
-                Pattern::EnumVariant(_, _, capture) => {
-                    if let Some(c) = capture {
-                        let local = IrValue::Local(c.clone());
-                        self.emit(IrInst::Alloca(local.clone()));
-                        self.emit(IrInst::Store(target.clone(), local));
-                    }
+                Pattern::EnumVariant(_, _, Some(c)) => {
+                    let local = IrValue::Local(c.clone());
+                    self.emit(IrInst::Alloca(local.clone()));
+                    self.emit(IrInst::Store(target.clone(), local));
                 }
+                Pattern::EnumVariant(_, _, None) => {}
                 _ => {}
             }
 
@@ -959,20 +969,12 @@ impl IrGenerator {
                 self.emit(IrInst::Gep(ptr.clone(), obj_val, start_val.clone()));
                 // Compute length: end - start
                 let len = self.new_temp();
-                self.emit(IrInst::BinOp(
-                    IrOp::Sub,
-                    len.clone(),
-                    end_val,
-                    start_val,
-                ));
+                self.emit(IrInst::BinOp(IrOp::Sub, len.clone(), end_val, start_val));
                 // Store slice as struct { ptr, len }
                 self.emit(IrInst::StructInit(
                     temp.clone(),
                     "Slice".into(),
-                    vec![
-                        ("ptr".into(), ptr),
-                        ("len".into(), len),
-                    ],
+                    vec![("ptr".into(), ptr), ("len".into(), len)],
                 ));
                 temp
             }
@@ -1135,10 +1137,9 @@ impl IrGenerator {
                     self.defer_stack.pop();
                 }
 
-                let has_terminal = self
-                    .insts
-                    .last()
-                    .is_some_and(|i| matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_)));
+                let has_terminal = self.insts.last().is_some_and(|i| {
+                    matches!(i, IrInst::Ret(_) | IrInst::RetVoid | IrInst::Jump(_))
+                });
                 if !has_terminal {
                     self.emit(IrInst::RetVoid);
                 }
@@ -1191,6 +1192,20 @@ impl IrGenerator {
                     ));
                 }
                 temp
+            }
+
+            Expr::Stop => {
+                let temp = self.new_temp();
+                self.push_comment("stop expression".into());
+                self.emit(IrInst::Comment("STOP".into()));
+                IrValue::Void
+            }
+
+            Expr::Next => {
+                let temp = self.new_temp();
+                self.push_comment("next expression".into());
+                self.emit(IrInst::Comment("NEXT".into()));
+                IrValue::Void
             }
         }
     }
@@ -1322,7 +1337,10 @@ impl IrGenerator {
             // ── Reflection ──
             "TypeOf" => {
                 self.push_comment(format!("@TypeOf({})", display_ir_args(&ir_args)));
-                self.emit(IrInst::Copy(result.clone(), ir_args.first().cloned().unwrap_or(IrValue::Void)));
+                self.emit(IrInst::Copy(
+                    result.clone(),
+                    ir_args.first().cloned().unwrap_or(IrValue::Void),
+                ));
             }
             "SizeOf" | "AlignOf" | "TypeName" | "EnumCount" | "Fields" => {
                 self.push_comment(format!("@{}(type_arg)", bn));
@@ -1359,41 +1377,21 @@ impl IrGenerator {
             // ── Memory ──
             "memcpy" => {
                 self.push_comment("@memcpy(dest, src, count)".into());
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "memcpy".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "memcpy".into(), ir_args));
             }
             "memset" => {
                 self.push_comment("@memset(dest, value, count)".into());
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "memset".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "memset".into(), ir_args));
             }
             "memmove" => {
                 self.push_comment("@memmove(dest, src, count)".into());
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "memmove".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "memmove".into(), ir_args));
             }
             "pageAlloc" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "pageAlloc".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "pageAlloc".into(), ir_args));
             }
             "pageFree" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "pageFree".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "pageFree".into(), ir_args));
             }
             "comptimeDefaultAllocator" => {
                 self.push_comment("@comptimeDefaultAllocator()".into());
@@ -1414,137 +1412,69 @@ impl IrGenerator {
             }
             "compileError" => {
                 self.push_comment("@compileError — compilation halted".into());
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "compileError".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "compileError".into(), ir_args));
             }
             "embedFile" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "embedFile".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "embedFile".into(), ir_args));
             }
 
             // ── Control Flow ──
             "panic" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "panic".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "panic".into(), ir_args));
             }
             "breakpoint" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "breakpoint".into(),
-                    vec![],
-                ));
+                self.emit(IrInst::Call(result.clone(), "breakpoint".into(), vec![]));
             }
             "trap" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "trap".into(),
-                    vec![],
-                ));
+                self.emit(IrInst::Call(result.clone(), "trap".into(), vec![]));
             }
             "sysCall" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "sysCall".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "sysCall".into(), ir_args));
             }
 
             // ── Materialization ──
             "str" | "str.from" | "str.from_raw" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "str_init".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "str_init".into(), ir_args));
             }
             "vec" | "vec_with_allocator" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "vec_init".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "vec_init".into(), ir_args));
             }
             "map" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "map_init".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "map_init".into(), ir_args));
             }
             "set" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "set_init".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "set_init".into(), ir_args));
             }
 
             // ── Math (Overflow-Safe) ──
             "addWithOverflow" | "subWithOverflow" | "mulWithOverflow" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    bn.to_string(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), bn.to_string(), ir_args));
             }
 
             // ── Bitwise ──
             "ctz" | "clz" | "popCount" | "bswap" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    bn.to_string(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), bn.to_string(), ir_args));
             }
 
             // ── Concurrency ──
             "atomicLoad" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "atomicLoad".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "atomicLoad".into(), ir_args));
             }
             "atomicStore" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "atomicStore".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "atomicStore".into(), ir_args));
             }
             "cmpxchg" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    "cmpxchg".into(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), "cmpxchg".into(), ir_args));
             }
 
             // ── Test assertions ──
             "assert" | "assertEq" => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    bn.to_string(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), bn.to_string(), ir_args));
             }
 
             // ── Fallback: pass through as regular call ──
             _ => {
-                self.emit(IrInst::Call(
-                    result.clone(),
-                    name.to_string(),
-                    ir_args,
-                ));
+                self.emit(IrInst::Call(result.clone(), name.to_string(), ir_args));
             }
         }
         result

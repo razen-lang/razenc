@@ -1,0 +1,37 @@
+// Test: Struct Declaration and Assignment
+
+Point :: struct {
+    pub x: f64,
+    pub y: f64,
+}
+
+Counter :: struct {
+    pub value: i32,
+    pub get :: fn(self: &Counter) -> i32 {
+        ret self.value
+    }
+    pub add_amount :: fn(self: &Counter, amount: i32) -> i32 {
+        ret self.value + amount
+    }
+}
+
+Person :: struct {
+    pub name: str,
+    pub age: i32,
+    active: bool,
+}
+
+main :: fn() -> void {
+    origin := Point{ x: 0.0, y: 0.0 }
+    @compileLog("point x: ", origin.x)
+
+    ctr := Counter{ value: 10 }
+    val := ctr.get()
+    @compileLog("counter get: ", val)
+
+    added := ctr.add_amount(5)
+    @compileLog("counter add: ", added)
+
+    person := Person{ name: "Alice", age: 30, active: true }
+    @compileLog("person name: ", person.name)
+}

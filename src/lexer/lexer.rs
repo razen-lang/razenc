@@ -937,21 +937,24 @@ impl<'a> Lexer<'a> {
                     byte_offset += 4;
                     continue;
                 }
-                if next == 's' && pos + 2 < len && chars[pos + 2] == 't' {
-                    if pos + 3 < len && chars[pos + 3] == 'r' {
-                        let end_byte = byte_offset + 4;
-                        result.push(Token::new(
-                            TokenKind::AtStr,
-                            "@str".into(),
-                            line,
-                            start_col,
-                            (start_byte, end_byte),
-                        ));
-                        pos += 4;
-                        col += 4;
-                        byte_offset += 4;
-                        continue;
-                    }
+                if next == 's'
+                    && pos + 2 < len
+                    && chars[pos + 2] == 't'
+                    && pos + 3 < len
+                    && chars[pos + 3] == 'r'
+                {
+                    let end_byte = byte_offset + 4;
+                    result.push(Token::new(
+                        TokenKind::AtStr,
+                        "@str".into(),
+                        line,
+                        start_col,
+                        (start_byte, end_byte),
+                    ));
+                    pos += 4;
+                    col += 4;
+                    byte_offset += 4;
+                    continue;
                 }
             }
 
@@ -1049,7 +1052,6 @@ impl<'a> Lexer<'a> {
             _ => Err(format!("Invalid escape sequence '\\{}'", esc)),
         }
     }
-
 }
 
 fn keyword_from_str(s: &str) -> Option<TokenKind> {

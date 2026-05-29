@@ -808,6 +808,12 @@ fn print_expr(expr: &Expr, indent: usize) {
             print_expr(val, indent + 1);
             print_expr(count, indent + 1);
         }
+        Expr::Stop => {
+            println!("{}{}Stop{}", i, YELLOW, RST);
+        }
+        Expr::Next => {
+            println!("{}{}Next{}", i, YELLOW, RST);
+        }
     }
 }
 

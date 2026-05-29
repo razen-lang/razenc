@@ -226,7 +226,7 @@ impl TypeInfo {
                 (TypeInfo::Int(_, _), TypeInfo::Int(_, _)) => true,
                 (TypeInfo::Float(_), TypeInfo::Float(_)) => true,
                 (TypeInfo::Ref(m1, i1), TypeInfo::Ref(m2, i2)) => {
-                    !(*m1 && !*m2) && i1.is_assignable_to(i2)
+                    (*m2 || !*m1) && i1.is_assignable_to(i2)
                 }
                 (TypeInfo::Pointer(i1), TypeInfo::Pointer(i2)) => {
                     i1.is_assignable_to(i2) || i1.is_void() || i2.is_void()

@@ -580,13 +580,12 @@ impl SemanticAnalyzer {
             Decl::Test(_name, block) => {
                 self.checker.check_block(block, &mut self.table);
             }
-            Decl::Mod(_, body) => {
-                if let Some(decls) = body {
-                    for d in decls {
-                        self.analyze_decl_bodies(d);
-                    }
+            Decl::Mod(_, Some(decls)) => {
+                for d in decls {
+                    self.analyze_decl_bodies(d);
                 }
             }
+            Decl::Mod(_, None) => {}
             _ => {}
         }
     }

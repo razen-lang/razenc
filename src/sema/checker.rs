@@ -573,7 +573,7 @@ impl TypeChecker {
                     return Some(TypeInfo::Builtin(bn.to_string()));
                 }
                 match table.lookup(name) {
-                    Some(sym) if matches!(sym, Symbol::BuiltinFn { .. }) => None,
+                    Some(Symbol::BuiltinFn { .. }) => None,
                     Some(sym) => sym.get_type(),
                     None => {
                         self.error(
@@ -668,6 +668,7 @@ impl TypeChecker {
                 }
             }
             Expr::MapLiteral(_pairs) => Some(TypeInfo::Builtin("map".into())),
+            Expr::Stop | Expr::Next => Some(TypeInfo::Noret),
         };
 
         // If the result type is Noret, mark the path as terminated

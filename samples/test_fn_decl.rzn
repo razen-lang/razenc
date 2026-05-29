@@ -1,0 +1,69 @@
+// Test: Function Declaration and Assignment
+
+// Constant function (comptime) - inferred const
+add :: fn(a: i32, b: i32) -> i32 {
+    ret a + b
+}
+
+// Constant function - with explicit param types
+multiply :: fn(x: f64, y: f64) -> f64 {
+    ret x * y
+}
+
+// Constant function - no params
+get_answer :: fn() -> i32 {
+    ret 42
+}
+
+// Constant function - no return (void)
+say_hello :: fn() -> void {
+    @compileLog("hello from razen")
+}
+
+// Generic constant function
+identity<T> :: fn(val: T) -> T {
+    ret val
+}
+
+// Mutable copy parameter
+double_it :: fn(mut val: i32) -> i32 {
+    val = val * 2
+    ret val
+}
+
+// Variable function (runtime) - inferred
+subtract := fn(a: i32, b: i32) -> i32 {
+    ret a - b
+}
+
+main :: fn() -> void {
+    // Call constant function
+    sum := add(10, 20)
+    @compileLog("add(10, 20): ", sum)
+
+    // Call multiply
+    product := multiply(3.0, 4.0)
+    @compileLog("multiply(3.0, 4.0): ", product)
+
+    // Call no-param function
+    answer := get_answer()
+    @compileLog("get_answer(): ", answer)
+
+    // Call void function
+    say_hello()
+
+    // Call generic function
+    id_int := identity<i32>(99)
+    @compileLog("identity<i32>(99): ", id_int)
+
+    id_str := identity<str>("razen")
+    @compileLog("identity<str>(razen): ", id_str)
+
+    // Call mutable param function
+    doubled := double_it(5)
+    @compileLog("double_it(5): ", doubled)
+
+    // Call variable function
+    diff := subtract(100, 30)
+    @compileLog("subtract(100, 30): ", diff)
+}
