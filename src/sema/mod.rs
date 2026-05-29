@@ -682,6 +682,8 @@ fn register_builtins(table: &mut SymbolTable) {
         ("atomicLoad", 2, Some(2)),
         ("atomicStore", 3, Some(3)),
         ("cmpxchg", 5, Some(5)),
+        ("assert", 1, Some(2)),
+        ("assertEq", 2, Some(3)),
     ];
     for (name, _, _) in builtins {
         table.insert_overwrite(

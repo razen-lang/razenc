@@ -17,22 +17,25 @@ impl<'a> Lexer<'a> {
         let mut pos = 0usize;
         let mut line = 1usize;
         let mut col = 1usize;
+        let mut byte_offset = 0usize;
 
         while pos < len {
             let ch = chars[pos];
             let start_col = col;
-            let start_byte = self.byte_offset_of(pos, &chars);
+            let start_byte = byte_offset;
 
             // Whitespace
             if ch == ' ' || ch == '\t' || ch == '\r' {
                 pos += 1;
                 col += 1;
+                byte_offset += ch.len_utf8();
                 continue;
             }
             if ch == '\n' {
                 pos += 1;
                 line += 1;
                 col = 1;
+                byte_offset += ch.len_utf8();
                 continue;
             }
 
@@ -41,15 +44,17 @@ impl<'a> Lexer<'a> {
                 let start = pos;
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 while pos < len && chars[pos] != '\n' {
                     if chars[pos] == '\t' {
                         col += 4;
                     } else {
                         col += 1;
                     }
+                    byte_offset += chars[pos].len_utf8();
                     pos += 1;
                 }
-                let end_byte = self.byte_offset_of(pos, &chars);
+                let end_byte = byte_offset;
                 let value: String = chars[start..pos].iter().collect();
                 result.push(Token::new(
                     TokenKind::LineComment,
@@ -64,30 +69,30 @@ impl<'a> Lexer<'a> {
             // Block comment /* ... */
             if ch == '/' && pos + 1 < len && chars[pos + 1] == '*' {
                 let start = pos;
-                let start_byte_bc = start_byte;
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 let mut depth: u32 = 1;
                 let mut unclosed = false;
                 while pos < len && depth > 0 {
-                    // Check for nested /* FIRST, before newline handling
                     if chars[pos] == '/' && pos + 1 < len && chars[pos + 1] == '*' {
                         depth += 1;
                         pos += 2;
                         col += 2;
+                        byte_offset += 2;
                         continue;
                     }
-                    // Check for closing */
                     if chars[pos] == '*' && pos + 1 < len && chars[pos + 1] == '/' {
                         depth -= 1;
                         pos += 2;
                         col += 2;
+                        byte_offset += 2;
                         continue;
                     }
-                    // Handle newlines AFTER checking comment delimiters
                     if chars[pos] == '\n' {
                         line += 1;
                         col = 1;
+                        byte_offset += 1;
                         pos += 1;
                         continue;
                     }
@@ -96,27 +101,27 @@ impl<'a> Lexer<'a> {
                     } else {
                         col += 1;
                     }
+                    byte_offset += chars[pos].len_utf8();
                     pos += 1;
                 }
                 if depth > 0 {
                     unclosed = true;
                 }
-                let end_byte = self.byte_offset_of(pos, &chars);
+                let end_byte = byte_offset;
                 if unclosed {
                     result.error(LexError::new(
                         "Unclosed block comment".into(),
                         line,
                         start_col,
-                        (start_byte_bc, end_byte),
+                        (start_byte, end_byte),
                     ));
-                    // Still emit the partial comment token
                     let value: String = chars[start..pos].iter().collect();
                     result.push(Token::new(
                         TokenKind::BlockComment,
                         value,
                         line,
                         start_col,
-                        (start_byte_bc, end_byte),
+                        (start_byte, end_byte),
                     ));
                     continue;
                 }
@@ -126,7 +131,7 @@ impl<'a> Lexer<'a> {
                     value,
                     line,
                     start_col,
-                    (start_byte_bc, end_byte),
+                    (start_byte, end_byte),
                 ));
                 continue;
             }
@@ -134,56 +139,72 @@ impl<'a> Lexer<'a> {
             // String literal "..."
             if ch == '"' {
                 let start = pos;
-                let start_byte_str = start_byte;
                 pos += 1;
                 col += 1;
+                byte_offset += 1;
                 let mut unclosed = true;
+                let mut just_escaped = false;
                 while pos < len {
+                    if just_escaped {
+                        just_escaped = false;
+                        byte_offset += chars[pos].len_utf8();
+                        pos += 1;
+                        col += 1;
+                        continue;
+                    }
                     if chars[pos] == '"' {
                         pos += 1;
                         col += 1;
+                        byte_offset += 1;
                         unclosed = false;
                         break;
                     }
                     if chars[pos] == '\n' {
                         line += 1;
                         col = 1;
+                        byte_offset += 1;
                     } else if chars[pos] == '\\' && pos + 1 < len {
                         let esc_start = pos;
-                        pos += 1;
-                        col += 1;
                         let esc_line = line;
                         let esc_col = col;
+                        let esc_byte = byte_offset;
+                        pos += 1;
+                        col += 1;
+                        byte_offset += 1;
                         match self.validate_escape(chars[pos], &chars, pos, line, col) {
                             Ok(skip) => {
+                                for i in 0..skip {
+                                    byte_offset += chars[pos + i].len_utf8();
+                                }
                                 pos += skip;
                                 col += skip;
+                                just_escaped = true;
                             }
                             Err(msg) => {
-                                let esc_byte = self.byte_offset_of(esc_start, &chars);
                                 result.error(LexError::new(
                                     msg,
                                     esc_line,
                                     esc_col,
                                     (esc_byte, esc_byte + 1),
                                 ));
-                                // Still consume the escape character to avoid infinite loop
+                                byte_offset += chars[pos].len_utf8();
                                 pos += 1;
                                 col += 1;
                             }
                         }
                         continue;
                     }
+                    byte_offset += chars[pos].len_utf8();
                     pos += 1;
                     col += 1;
                 }
-                let end_byte = self.byte_offset_of(pos, &chars);
+                let end_byte = byte_offset;
                 if unclosed {
                     result.error(LexError::new(
                         "Unclosed string literal".into(),
                         line,
                         start_col,
-                        (start_byte_str, end_byte),
+                        (start_byte, end_byte),
                     ));
                 }
                 let value: String = chars[start..pos].iter().collect();
@@ -192,7 +213,7 @@ impl<'a> Lexer<'a> {
                     value,
                     line,
                     start_col,
-                    (start_byte_str, end_byte),
+                    (start_byte, end_byte),
                 ));
                 continue;
             }
@@ -200,61 +221,72 @@ impl<'a> Lexer<'a> {
             // Char literal '...'
             if ch == '\'' {
                 let start = pos;
-                let start_byte_ch = start_byte;
                 pos += 1;
                 col += 1;
+                byte_offset += 1;
                 let mut unclosed = true;
+                let mut just_escaped = false;
                 while pos < len {
+                    if just_escaped {
+                        just_escaped = false;
+                        byte_offset += chars[pos].len_utf8();
+                        pos += 1;
+                        col += 1;
+                        continue;
+                    }
                     if chars[pos] == '\'' {
                         pos += 1;
                         col += 1;
+                        byte_offset += 1;
                         unclosed = false;
                         break;
                     }
                     if chars[pos] == '\n' {
                         line += 1;
                         col = 1;
+                        byte_offset += 1;
                     } else if chars[pos] == '\\' && pos + 1 < len {
                         let esc_start = pos;
                         let esc_line = line;
                         let esc_col = col;
+                        let esc_byte = byte_offset;
                         pos += 1;
                         col += 1;
+                        byte_offset += 1;
                         match self.validate_escape(chars[pos], &chars, pos, line, col) {
                             Ok(skip) => {
+                                for i in 0..skip {
+                                    byte_offset += chars[pos + i].len_utf8();
+                                }
                                 pos += skip;
                                 col += skip;
+                                just_escaped = true;
                             }
                             Err(msg) => {
-                                let esc_byte = self.byte_offset_of(esc_start, &chars);
                                 result.error(LexError::new(
                                     msg,
                                     esc_line,
                                     esc_col,
                                     (esc_byte, esc_byte + 1),
                                 ));
+                                byte_offset += chars[pos].len_utf8();
                                 pos += 1;
                                 col += 1;
                             }
                         }
                         continue;
                     }
-                    if pos + 1 < len && chars[pos] == '\\' && chars[pos + 1] == '\'' {
-                        // escaped single quote inside char literal: \'
-                        pos += 2;
-                        col += 2;
-                        continue;
-                    }
+                    byte_offset += chars[pos].len_utf8();
                     pos += 1;
                     col += 1;
                 }
-                let end_byte = self.byte_offset_of(pos, &chars);
+                let end_byte = byte_offset;
                 if unclosed {
                     result.error(LexError::new(
                         "Unclosed char literal".into(),
                         line,
                         start_col,
-                        (start_byte_ch, end_byte),
+                        (start_byte, end_byte),
                     ));
                 }
                 let value: String = chars[start..pos].iter().collect();
@@ -263,7 +295,7 @@ impl<'a> Lexer<'a> {
                     value,
                     line,
                     start_col,
-                    (start_byte_ch, end_byte),
+                    (start_byte, end_byte),
                 ));
                 continue;
             }
@@ -271,7 +303,6 @@ impl<'a> Lexer<'a> {
             // Number literal
             if ch.is_ascii_digit() {
                 let start = pos;
-                let start_byte_num = start_byte;
 
                 // 0x, 0X, 0b, 0B, 0o, 0O prefixes
                 if ch == '0' && pos + 1 < len {
@@ -279,11 +310,22 @@ impl<'a> Lexer<'a> {
                     if next == 'x' || next == 'X' {
                         pos += 2;
                         col += 2;
+                        byte_offset += 2;
+                        let digits_start = pos;
                         while pos < len && (chars[pos].is_ascii_hexdigit() || chars[pos] == '_') {
+                            byte_offset += chars[pos].len_utf8();
                             pos += 1;
                             col += 1;
                         }
-                        let end_byte = self.byte_offset_of(pos, &chars);
+                        if pos == digits_start {
+                            result.error(LexError::new(
+                                "Expected hex digits after '0x' prefix".into(),
+                                line,
+                                start_col,
+                                (start_byte, byte_offset),
+                            ));
+                        }
+                        let end_byte = byte_offset;
                         let value: String =
                             chars[start..pos].iter().filter(|&c| c != &'_').collect();
                         result.push(Token::new(
@@ -291,20 +333,31 @@ impl<'a> Lexer<'a> {
                             value,
                             line,
                             start_col,
-                            (start_byte_num, end_byte),
+                            (start_byte, end_byte),
                         ));
                         continue;
                     }
                     if next == 'b' || next == 'B' {
                         pos += 2;
                         col += 2;
+                        byte_offset += 2;
+                        let digits_start = pos;
                         while pos < len
                             && (chars[pos] == '0' || chars[pos] == '1' || chars[pos] == '_')
                         {
+                            byte_offset += chars[pos].len_utf8();
                             pos += 1;
                             col += 1;
                         }
-                        let end_byte = self.byte_offset_of(pos, &chars);
+                        if pos == digits_start {
+                            result.error(LexError::new(
+                                "Expected binary digits after '0b' prefix".into(),
+                                line,
+                                start_col,
+                                (start_byte, byte_offset),
+                            ));
+                        }
+                        let end_byte = byte_offset;
                         let value: String =
                             chars[start..pos].iter().filter(|&c| c != &'_').collect();
                         result.push(Token::new(
@@ -312,20 +365,31 @@ impl<'a> Lexer<'a> {
                             value,
                             line,
                             start_col,
-                            (start_byte_num, end_byte),
+                            (start_byte, end_byte),
                         ));
                         continue;
                     }
                     if next == 'o' || next == 'O' {
                         pos += 2;
                         col += 2;
+                        byte_offset += 2;
+                        let digits_start = pos;
                         while pos < len
                             && ((chars[pos] >= '0' && chars[pos] <= '7') || chars[pos] == '_')
                         {
+                            byte_offset += chars[pos].len_utf8();
                             pos += 1;
                             col += 1;
                         }
-                        let end_byte = self.byte_offset_of(pos, &chars);
+                        if pos == digits_start {
+                            result.error(LexError::new(
+                                "Expected octal digits after '0o' prefix".into(),
+                                line,
+                                start_col,
+                                (start_byte, byte_offset),
+                            ));
+                        }
+                        let end_byte = byte_offset;
                         let value: String =
                             chars[start..pos].iter().filter(|&c| c != &'_').collect();
                         result.push(Token::new(
@@ -333,7 +397,7 @@ impl<'a> Lexer<'a> {
                             value,
                             line,
                             start_col,
-                            (start_byte_num, end_byte),
+                            (start_byte, end_byte),
                         ));
                         continue;
                     }
@@ -341,50 +405,56 @@ impl<'a> Lexer<'a> {
 
                 // Decimal digits (including _ separators)
                 while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') {
+                    byte_offset += chars[pos].len_utf8();
                     pos += 1;
                     col += 1;
                 }
 
                 // Float: check for '.' followed by digit (not '..')
                 if pos + 1 < len && chars[pos] == '.' && chars[pos + 1].is_ascii_digit() {
+                    byte_offset += chars[pos].len_utf8();
                     pos += 1;
                     col += 1;
                     while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') {
+                        byte_offset += chars[pos].len_utf8();
                         pos += 1;
                         col += 1;
                     }
                     if pos < len && (chars[pos] == 'e' || chars[pos] == 'E') {
+                        byte_offset += chars[pos].len_utf8();
                         pos += 1;
                         col += 1;
                         if pos < len && (chars[pos] == '+' || chars[pos] == '-') {
+                            byte_offset += chars[pos].len_utf8();
                             pos += 1;
                             col += 1;
                         }
                         while pos < len && (chars[pos].is_ascii_digit() || chars[pos] == '_') {
+                            byte_offset += chars[pos].len_utf8();
                             pos += 1;
                             col += 1;
                         }
                     }
-                    let end_byte = self.byte_offset_of(pos, &chars);
+                    let end_byte = byte_offset;
                     let value: String = chars[start..pos].iter().filter(|&c| c != &'_').collect();
                     result.push(Token::new(
                         TokenKind::FloatValue,
                         value,
                         line,
                         start_col,
-                        (start_byte_num, end_byte),
+                        (start_byte, end_byte),
                     ));
                     continue;
                 }
 
-                let end_byte = self.byte_offset_of(pos, &chars);
+                let end_byte = byte_offset;
                 let value: String = chars[start..pos].iter().filter(|&c| c != &'_').collect();
                 result.push(Token::new(
                     TokenKind::IntegerValue,
                     value,
                     line,
                     start_col,
-                    (start_byte_num, end_byte),
+                    (start_byte, end_byte),
                 ));
                 continue;
             }
@@ -392,12 +462,12 @@ impl<'a> Lexer<'a> {
             // Identifier, keyword, or type keyword
             if ch.is_ascii_alphabetic() || ch == '_' {
                 let start = pos;
-                let start_byte_id = start_byte;
                 while pos < len && (chars[pos].is_ascii_alphanumeric() || chars[pos] == '_') {
+                    byte_offset += chars[pos].len_utf8();
                     pos += 1;
                     col += 1;
                 }
-                let end_byte = self.byte_offset_of(pos, &chars);
+                let end_byte = byte_offset;
                 let word: String = chars[start..pos].iter().collect();
                 if word == "_" {
                     result.push(Token::new(
@@ -405,7 +475,7 @@ impl<'a> Lexer<'a> {
                         word,
                         line,
                         start_col,
-                        (start_byte_id, end_byte),
+                        (start_byte, end_byte),
                     ));
                 } else if let Some(kw) = keyword_from_str(&word) {
                     result.push(Token::new(
@@ -413,7 +483,7 @@ impl<'a> Lexer<'a> {
                         word,
                         line,
                         start_col,
-                        (start_byte_id, end_byte),
+                        (start_byte, end_byte),
                     ));
                 } else {
                     result.push(Token::new(
@@ -421,7 +491,7 @@ impl<'a> Lexer<'a> {
                         word,
                         line,
                         start_col,
-                        (start_byte_id, end_byte),
+                        (start_byte, end_byte),
                     ));
                 }
                 continue;
@@ -431,7 +501,7 @@ impl<'a> Lexer<'a> {
 
             if ch == ':' {
                 if pos + 1 < len && chars[pos + 1] == '=' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::ColonEquals,
                         ":=".into(),
@@ -441,10 +511,11 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == ':' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::ColonColon,
                         "::".into(),
@@ -454,9 +525,10 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
-                let end_byte = self.byte_offset_of(pos + 1, &chars);
+                let end_byte = byte_offset + 1;
                 result.push(Token::new(
                     TokenKind::Colon,
                     ":".into(),
@@ -466,11 +538,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 1;
                 col += 1;
+                byte_offset += 1;
                 continue;
             }
 
             if ch == '~' && pos + 1 < len && chars[pos + 1] == '>' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::TildeArrow,
                     "~>".into(),
@@ -480,12 +553,13 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
             if ch == '-' {
                 if pos + 1 < len && chars[pos + 1] == '>' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::Arrow,
                         "->".into(),
@@ -495,10 +569,11 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == '=' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::MinusEquals,
                         "-=".into(),
@@ -508,9 +583,10 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
-                let end_byte = self.byte_offset_of(pos + 1, &chars);
+                let end_byte = byte_offset + 1;
                 result.push(Token::new(
                     TokenKind::Minus,
                     "-".into(),
@@ -520,13 +596,14 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 1;
                 col += 1;
+                byte_offset += 1;
                 continue;
             }
 
             if ch == '.' {
                 if pos + 1 < len && chars[pos + 1] == '.' {
                     if pos + 2 < len && chars[pos + 2] == '=' {
-                        let end_byte = self.byte_offset_of(pos + 3, &chars);
+                        let end_byte = byte_offset + 3;
                         result.push(Token::new(
                             TokenKind::DotDotEquals,
                             "..=".into(),
@@ -536,9 +613,10 @@ impl<'a> Lexer<'a> {
                         ));
                         pos += 3;
                         col += 3;
+                        byte_offset += 3;
                         continue;
                     }
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::DotDot,
                         "..".into(),
@@ -548,10 +626,11 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == '*' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::DotStar,
                         ".*".into(),
@@ -561,9 +640,10 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
-                let end_byte = self.byte_offset_of(pos + 1, &chars);
+                let end_byte = byte_offset + 1;
                 result.push(Token::new(
                     TokenKind::Dot,
                     ".".into(),
@@ -573,11 +653,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 1;
                 col += 1;
+                byte_offset += 1;
                 continue;
             }
 
             if ch == '=' && pos + 1 < len && chars[pos + 1] == '=' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::EqualEqual,
                     "==".into(),
@@ -587,11 +668,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
             if ch == '=' && pos + 1 < len && chars[pos + 1] == '>' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::FatArrow,
                     "=>".into(),
@@ -601,12 +683,13 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
             if ch == '!' {
                 if pos + 1 < len && chars[pos + 1] == '=' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::NotEqual,
                         "!=".into(),
@@ -616,9 +699,10 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
-                let end_byte = self.byte_offset_of(pos + 1, &chars);
+                let end_byte = byte_offset + 1;
                 result.push(Token::new(
                     TokenKind::Bang,
                     "!".into(),
@@ -628,12 +712,13 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 1;
                 col += 1;
+                byte_offset += 1;
                 continue;
             }
 
             if ch == '<' {
                 if pos + 1 < len && chars[pos + 1] == '=' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::LessEqual,
                         "<=".into(),
@@ -643,10 +728,11 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == '<' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::ShiftLeft,
                         "<<".into(),
@@ -656,9 +742,10 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
-                let end_byte = self.byte_offset_of(pos + 1, &chars);
+                let end_byte = byte_offset + 1;
                 result.push(Token::new(
                     TokenKind::Less,
                     "<".into(),
@@ -668,12 +755,13 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 1;
                 col += 1;
+                byte_offset += 1;
                 continue;
             }
 
             if ch == '>' {
                 if pos + 1 < len && chars[pos + 1] == '=' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::GreaterEqual,
                         ">=".into(),
@@ -683,10 +771,11 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
                 if pos + 1 < len && chars[pos + 1] == '>' {
-                    let end_byte = self.byte_offset_of(pos + 2, &chars);
+                    let end_byte = byte_offset + 2;
                     result.push(Token::new(
                         TokenKind::ShiftRight,
                         ">>".into(),
@@ -696,9 +785,10 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 2;
                     col += 2;
+                    byte_offset += 2;
                     continue;
                 }
-                let end_byte = self.byte_offset_of(pos + 1, &chars);
+                let end_byte = byte_offset + 1;
                 result.push(Token::new(
                     TokenKind::Greater,
                     ">".into(),
@@ -708,11 +798,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 1;
                 col += 1;
+                byte_offset += 1;
                 continue;
             }
 
             if ch == '&' && pos + 1 < len && chars[pos + 1] == '&' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::AndAnd,
                     "&&".into(),
@@ -722,11 +813,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
             if ch == '|' && pos + 1 < len && chars[pos + 1] == '|' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::OrOr,
                     "||".into(),
@@ -736,11 +828,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
             if ch == '+' && pos + 1 < len && chars[pos + 1] == '=' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::PlusEquals,
                     "+=".into(),
@@ -750,11 +843,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
             if ch == '*' && pos + 1 < len && chars[pos + 1] == '=' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::StarEquals,
                     "*=".into(),
@@ -764,11 +858,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
             if ch == '/' && pos + 1 < len && chars[pos + 1] == '=' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::SlashEquals,
                     "/=".into(),
@@ -778,11 +873,12 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
             if ch == '%' && pos + 1 < len && chars[pos + 1] == '=' {
-                let end_byte = self.byte_offset_of(pos + 2, &chars);
+                let end_byte = byte_offset + 2;
                 result.push(Token::new(
                     TokenKind::PercentEquals,
                     "%=".into(),
@@ -792,14 +888,15 @@ impl<'a> Lexer<'a> {
                 ));
                 pos += 2;
                 col += 2;
+                byte_offset += 2;
                 continue;
             }
 
-            // Multi-character @ tokens: @vec, @map, @set
+            // Multi-character @ tokens: @vec, @map, @set, @str
             if ch == '@' && pos + 1 < len {
                 let next = chars[pos + 1];
                 if next == 'v' && pos + 3 < len && chars[pos + 2] == 'e' && chars[pos + 3] == 'c' {
-                    let end_byte = self.byte_offset_of(pos + 4, &chars);
+                    let end_byte = byte_offset + 4;
                     result.push(Token::new(
                         TokenKind::AtVec,
                         "@vec".into(),
@@ -809,10 +906,11 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 4;
                     col += 4;
+                    byte_offset += 4;
                     continue;
                 }
                 if next == 'm' && pos + 3 < len && chars[pos + 2] == 'a' && chars[pos + 3] == 'p' {
-                    let end_byte = self.byte_offset_of(pos + 4, &chars);
+                    let end_byte = byte_offset + 4;
                     result.push(Token::new(
                         TokenKind::AtMap,
                         "@map".into(),
@@ -822,10 +920,11 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 4;
                     col += 4;
+                    byte_offset += 4;
                     continue;
                 }
                 if next == 's' && pos + 3 < len && chars[pos + 2] == 'e' && chars[pos + 3] == 't' {
-                    let end_byte = self.byte_offset_of(pos + 4, &chars);
+                    let end_byte = byte_offset + 4;
                     result.push(Token::new(
                         TokenKind::AtSet,
                         "@set".into(),
@@ -835,7 +934,24 @@ impl<'a> Lexer<'a> {
                     ));
                     pos += 4;
                     col += 4;
+                    byte_offset += 4;
                     continue;
+                }
+                if next == 's' && pos + 2 < len && chars[pos + 2] == 't' {
+                    if pos + 3 < len && chars[pos + 3] == 'r' {
+                        let end_byte = byte_offset + 4;
+                        result.push(Token::new(
+                            TokenKind::AtStr,
+                            "@str".into(),
+                            line,
+                            start_col,
+                            (start_byte, end_byte),
+                        ));
+                        pos += 4;
+                        col += 4;
+                        byte_offset += 4;
+                        continue;
+                    }
                 }
             }
 
@@ -861,20 +977,20 @@ impl<'a> Lexer<'a> {
                 '[' => TokenKind::LeftBracket,
                 ']' => TokenKind::RightBracket,
                 _ => {
-                    // Unknown character — report error instead of silently skipping
-                    let end_byte = start_byte + ch.len_utf8();
+                    let end_byte = byte_offset + ch.len_utf8();
                     result.error(LexError::new(
                         format!("Unexpected character '{}'", ch),
                         line,
                         start_col,
                         (start_byte, end_byte),
                     ));
+                    byte_offset += ch.len_utf8();
                     pos += 1;
                     col += 1;
                     continue;
                 }
             };
-            let end_byte = start_byte + ch.len_utf8();
+            let end_byte = byte_offset + ch.len_utf8();
             let value = format!("{}", ch);
             result.push(Token::new(
                 single,
@@ -885,6 +1001,7 @@ impl<'a> Lexer<'a> {
             ));
             pos += 1;
             col += 1;
+            byte_offset += ch.len_utf8();
         }
 
         result
@@ -933,20 +1050,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn byte_offset_of(&self, char_idx: usize, chars: &[char]) -> usize {
-        // chars[..char_idx] gives us the characters up to this point
-        // We can sum their byte lengths, or more simply use the source string
-        // by finding the byte offset of the character at char_idx.
-        if char_idx == 0 {
-            return 0;
-        }
-        // chars[..char_idx].iter().map(|c| c.len_utf8()).sum()
-        let mut byte_pos = 0usize;
-        for i in 0..char_idx {
-            byte_pos += chars[i].len_utf8();
-        }
-        byte_pos
-    }
 }
 
 fn keyword_from_str(s: &str) -> Option<TokenKind> {

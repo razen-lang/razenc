@@ -113,6 +113,7 @@ pub enum TokenKind {
     AtVec,
     AtMap,
     AtSet,
+    AtStr,
 
     // Sigils & Special
     ColonEquals,
@@ -348,6 +349,7 @@ impl fmt::Display for TokenKind {
             TokenKind::AtVec => write!(f, "@vec"),
             TokenKind::AtMap => write!(f, "@map"),
             TokenKind::AtSet => write!(f, "@set"),
+            TokenKind::AtStr => write!(f, "@str"),
 
             // Sigils & Special
             TokenKind::ColonEquals => write!(f, ":="),

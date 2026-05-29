@@ -1012,4 +1012,128 @@ mod tests {
         let result = analyze(decls);
         let _ = result;
     }
+
+    // ─── Section 4 Tests ───
+
+    // #15: Builtin @assert — valid call
+    #[test]
+    fn test_builtin_assert_valid() {
+        let decls = vec![make_void_fn(
+            "test_assert",
+            block(vec![expr_stmt(Expr::Call(
+                Box::new(ident("@assert")),
+                vec![lit_bool(true)],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(result.is_ok(), "@assert(true) should pass: {:?}", result);
+    }
+
+    // #15: Builtin @assert — wrong argument type
+    #[test]
+    fn test_builtin_assert_wrong_type() {
+        let decls = vec![make_void_fn(
+            "test_assert_bad",
+            block(vec![expr_stmt(Expr::Call(
+                Box::new(ident("@assert")),
+                vec![lit_i32(42)],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(
+            result.is_err(),
+            "@assert(42) should fail — condition must be bool"
+        );
+    }
+
+    // #15: Builtin @assertEq — valid call
+    #[test]
+    fn test_builtin_asserteq_valid() {
+        let decls = vec![make_void_fn(
+            "test_asserteq",
+            block(vec![expr_stmt(Expr::Call(
+                Box::new(ident("@assertEq")),
+                vec![lit_i32(1), lit_i32(1)],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(result.is_ok(), "@assertEq(1, 1) should pass: {:?}", result);
+    }
+
+    // #15: Builtin @assertEq — type mismatch
+    #[test]
+    fn test_builtin_asserteq_type_mismatch() {
+        let decls = vec![make_void_fn(
+            "test_asserteq_bad",
+            block(vec![expr_stmt(Expr::Call(
+                Box::new(ident("@assertEq")),
+                vec![lit_i32(1), lit_str("hello")],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(
+            result.is_err(),
+            "@assertEq(1, \"hello\") should fail — type mismatch"
+        );
+    }
+
+    // #15: Builtin @memcpy — wrong arg type
+    #[test]
+    fn test_builtin_memcpy_wrong_arg_type() {
+        let decls = vec![make_void_fn(
+            "test_memcpy_bad",
+            block(vec![expr_stmt(Expr::Call(
+                Box::new(ident("@memcpy")),
+                vec![lit_i32(0), lit_i32(0), lit_i32(10)],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(result.is_err(), "@memcpy with non-pointer args should fail");
+    }
+
+    // #15: Builtin @sysCall — minimum args
+    #[test]
+    fn test_builtin_syscall_min_args() {
+        let decls = vec![make_void_fn(
+            "test_syscall",
+            block(vec![expr_stmt(Expr::Call(
+                Box::new(ident("@sysCall")),
+                vec![lit_i32(1)],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(result.is_ok(), "@sysCall(1) should pass: {:?}", result);
+    }
+
+    // #15: Builtin @sysCall — no args error
+    #[test]
+    fn test_builtin_syscall_no_args() {
+        let decls = vec![make_void_fn(
+            "test_syscall_no_args",
+            block(vec![expr_stmt(Expr::Call(
+                Box::new(ident("@sysCall")),
+                vec![],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(result.is_err(), "@sysCall() with no args should fail");
+    }
+
+    // #15: Builtin @compileError returns noret
+    #[test]
+    fn test_builtin_compile_error_noret() {
+        let decls = vec![make_i32_fn(
+            "test_compile_err",
+            block(vec![ret_expr(Expr::Call(
+                Box::new(ident("@compileError")),
+                vec![lit_str("bad")],
+            ))]),
+        )];
+        let result = analyze(decls);
+        assert!(
+            result.is_ok(),
+            "@compileError should be assignable to i32: {:?}",
+            result
+        );
+    }
 }

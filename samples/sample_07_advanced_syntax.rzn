@@ -1,0 +1,419 @@
+// Sample 7: Advanced Syntax — Behaviours, Generics, Complex Types, Error Handling
+
+use std.fmt
+use std.mem.PageAllocator
+
+// ---- Behaviours (Traits) ----
+Drawable :: behave {
+    draw :: fn(self: &@Self) -> void
+    area :: fn(self: &@Self) -> f64
+    mut resize :: fn(self: &@Self, scale: f64) -> void {
+        // default no-op
+    }
+}
+
+Comparable :: behave {
+    eq :: fn(self: &@Self, other: &@Self) -> bool
+    lt :: fn(self: &@Self, other: &@Self) -> bool
+}
+
+// ---- Structs implementing behaviours ----
+Point :: struct ~> Drawable {
+    x: f64,
+    y: f64,
+
+    pub draw :: fn(self: &Point) -> void {
+        @compileLog("Point(", self.x, ", ", self.y, ")")
+    }
+
+    pub area :: fn(self: &Point) -> f64 {
+        ret self.x * self.y
+    }
+
+    pub distance_to :: fn(self: &Point, other: &Point) -> f64 {
+        dx := other.x - self.x
+        dy := other.y - self.y
+        ret @as(f64, @sqrt(dx * dx + dy * dy))
+    }
+}
+
+Circle :: struct ~> Drawable {
+    center: Point,
+    radius: f64,
+
+    pub draw :: fn(self: &Circle) -> void {
+        @compileLog("Circle at (", self.center.x, ", ", self.center.y, ") r=", self.radius)
+    }
+
+    pub area :: fn(self: &Circle) -> f64 {
+        ret PI * self.radius * self.radius
+    }
+}
+
+// ---- Generic Struct ----
+Result<T, E> :: union {
+    Ok: T,
+    Err: E,
+}
+
+Optional<T> :: union {
+    Some: T,
+    None: void,
+}
+
+Pair<A, B> :: struct {
+    first: A,
+    second: B,
+
+    pub swap :: fn(self: &Pair<A, B>) -> Pair<B, A> {
+        ret Pair<B, A>{ first: self.second, second: self.first }
+    }
+}
+
+// ---- Enums with associated values ----
+Token :: enum {
+    Identifier: str,
+    Number: i64,
+    Float: f64,
+    StringLit: str,
+    Keyword: str,
+    Eof,
+}
+
+Direction :: enum {
+    North,
+    South,
+    East,
+    West,
+}
+
+HttpStatus :: enum ~> Comparable {
+    Ok = 200,
+    Created = 201,
+    Bad_Request = 400,
+    Not_Found = 404,
+    Server_Error = 500,
+
+    pub eq :: fn(self: &HttpStatus, other: &HttpStatus) -> bool {
+        ret self.* == other.*
+    }
+
+    pub lt :: fn(self: &HttpStatus, other: &HttpStatus) -> bool {
+        ret self.* < other.*
+    }
+
+    pub is_success :: fn(self: &HttpStatus) -> bool {
+        ret self.* >= 200 && self.* < 300
+    }
+}
+
+// ---- Error Union Types ----
+ParseError :: error {
+    Unexpected_Eof,
+    Invalid_Syntax,
+    Type_Mismatch,
+    Undefined_Symbol,
+}
+
+IoError :: error {
+    File_Not_Found,
+    Permission_Denied,
+    Disk_Full,
+}
+
+// ---- Functions with all parameter styles ----
+process_data :: fn(data: &mut [u8], len: usize) -> void {
+    mut i := 0
+    loop i < len {
+        data[i] = data[i] + 1
+        i += 1
+    }
+}
+
+transform :: fn(mut value: i32, fn_ptr: fn(i32) -> i32) -> i32 {
+    ret fn_ptr(value)
+}
+
+apply_twice :: fn(value: i32, f: fn(i32) -> i32) -> i32 {
+    first := f(value)
+    second := f(first)
+    ret second
+}
+
+// ---- Generic Functions ----
+identity<T> :: fn(x: T) -> T {
+    ret x
+}
+
+max<T> :: fn(a: T, b: T) -> T {
+    if a > b {
+        ret a
+    }
+    ret b
+}
+
+make_pair<A, B> :: fn(first: A, second: B) -> Pair<A, B> {
+    ret Pair<A, B>{ first: first, second: second }
+}
+
+// ---- Complex Type Signatures ----
+Callback :: fn(i32, str) -> bool
+Handler  :: fn(&mut void) -> void
+Mapper   :: fn(anytype) -> anytype
+
+// ---- Constants with explicit types ----
+PI      :: 3.14159265358979
+E       :: 2.71828182845904
+MAX_U32 : u32 : 4294967295
+MIN_I32 : i32 : -2147483648
+ZERO    :: 0
+ONE     :: 1
+NEG_ONE :: -1
+
+// ---- Comptime variables ----
+mut COMPILE_COUNT :: 0
+mut CONFIG_DEBUG  :: true
+
+// ---- Collections ----
+PRIMES :: @vec[2, 3, 5, 7, 11, 13]
+COLORS :: @map{ "red": 0xFF0000, "green": 0x00FF00, "blue": 0x0000FF }
+UNIQUE :: @set{10, 20, 30, 40, 50}
+BUFFER :: @vec[0; 256]
+
+// ---- Defer and try-catch patterns ----
+read_file :: fn(path: str) -> IoError!str {
+    file := open(path)
+    defer file.close()
+
+    content := file.read_all()
+    ret content
+}
+
+parse_input :: fn(input: str) -> ParseError!Token {
+    mut lexer := init_lexer(input)
+    defer lexer.deinit()
+
+    token := try lexer.next_token()
+    catch |e| {
+        @compileLog("parse error: ", e)
+        ret e
+    }
+
+    ret token
+}
+
+// ---- Loops with captures ----
+iterate_vec :: fn(items: &[i32]) -> i32 {
+    mut sum := 0
+    loop items |item| {
+        sum += item
+    }
+    ret sum
+}
+
+mutate_in_place :: fn(data: &mut [i32]) -> void {
+    loop data |&mut element| {
+        element = element * 2
+    }
+}
+
+multi_range :: fn() -> void {
+    xs := @vec[1, 2, 3]
+    ys := @vec[10, 20, 30]
+    loop xs, ys |x, y| {
+        @compileLog(x, " + ", y, " = ", x + y)
+    }
+}
+
+// ---- Range operators ----
+RANGE_EXCL :: 0..10
+RANGE_INCL :: 0..=10
+SLICE_OP   :: data[5..20]
+SLICE_INCL :: data[5..=20]
+
+// ---- Dereference patterns ----
+DerefExample :: struct {
+    value: i32,
+}
+
+deref_demo :: fn() -> void {
+    mut num := 42
+    ptr := &mut num
+    ptr.* = 100
+
+    mut item := DerefExample{ value: 10 }
+    item_ptr := &mut item
+    item_ptr.value = 20
+
+    raw := *DerefExample
+    raw.* = DerefExample{ value: 30 }
+}
+
+// ---- Match with enum captures ----
+describe_token :: fn(tok: Token) -> void {
+    match tok {
+        Token.Identifier |name| => @compileLog("ident: ", name),
+        Token.Number |n|        => @compileLog("number: ", n),
+        Token.Float |f|         => @compileLog("float: ", f),
+        Token.StringLit |s|     => @compileLog("string: ", s),
+        Token.Keyword |k|       => @compileLog("keyword: ", k),
+        Token.Eof               => @compileLog("end of file"),
+        _                       => @panic("unknown token"),
+    }
+}
+
+// ---- Direction match ----
+describe_dir :: fn(d: Direction) -> void {
+    match d {
+        Direction.North => @compileLog("north"),
+        Direction.South => @compileLog("south"),
+        Direction.East  => @compileLog("east"),
+        Direction.West  => @compileLog("west"),
+        _               => @panic("invalid direction"),
+    }
+}
+
+// ---- Nested control flow ----
+process :: fn(input: i32) -> ParseError!i32 {
+    if input < 0 {
+        ret ParseError.Invalid_Syntax
+    }
+
+    mut result := input
+
+    loop result > 100 {
+        result = result - 50
+        if result == 0 {
+            stop
+        }
+        if result < 10 {
+            next
+        }
+        result = result / 2
+    }
+
+    match result {
+        0   => ret ParseError.Undefined_Symbol,
+        1   => ret 1,
+        100 => ret ParseError.Unexpected_Eof,
+        _   => ret result,
+    }
+}
+
+// ---- Type alias with fn type ----
+Predicate :: fn(i32) -> bool
+Transform :: fn(i32) -> i32
+Consumer  :: fn(i32) -> void
+
+// ---- Behaviour with generic-like pattern ----
+Container :: behave {
+    len :: fn(self: &@Self) -> usize
+    get :: fn(self: &@Self, index: usize) -> anytype
+    mut push :: fn(self: &@Self, value: anytype) -> void
+}
+
+// ---- All escape characters in one string ----
+ESCAPES :: "newline:\ntab:\tcarriage:\rnull:\0back:\\quote:\"single:'"
+
+// ---- Number edge cases ----
+SMALL_INT  :: 0
+LARGE_INT  :: 9999999999999999
+HEX_ZERO   :: 0x0
+BIN_ZERO   :: 0b0
+OCT_ZERO   :: 0o0
+FLOAT_ONE  :: 1.0
+FLOAT_ZERO :: 0.0
+EXP_LARGE  :: 1.0e308
+EXP_SMALL  :: 1.0e-308
+
+// ---- Function as first-class value ----
+apply :: fn(value: i32, op: fn(i32) -> i32) -> i32 {
+    ret op(value)
+}
+
+double :: fn(x: i32) -> i32 { ret x * 2 }
+negate :: fn(x: i32) -> i32 { ret -x }
+
+// ---- Main function tying it all together ----
+main :: fn() -> i32 {
+    // Variable declarations — all forms
+    x := 10
+    y : i32 = 20
+    mut z := 30
+    z = z + x + y
+
+    // Constants — all forms
+    LOCAL_CONST :: 100
+    LOCAL_EXPL  : i32 : 200
+    mut STATE_COMPTIME :: 0
+    STATE_COMPTIME = 1
+
+    // Struct init
+    origin := Point{ x: 0.0, y: 0.0 }
+    origin.draw()
+
+    // Generic usage
+    val := identity<i32>(42)
+    bigger := max<f64>(3.14, 2.71)
+    pair := make_pair<str, i32>("hello", 42)
+
+    // Union init
+    result_ok: Result<i32, ParseError> = Result{ Ok: 42 }
+    result_err: Result<i32, ParseError> = Result{ Err: ParseError.Invalid_Syntax }
+
+    // Error union
+    parsed: ParseError!i32 = 42
+
+    // Optional
+    maybe: ?i32 = 42
+    nothing: ?i32 = nil
+
+    // Function pointer
+    op: fn(i32) -> i32 = double
+    res := apply(21, op)
+
+    // Loop
+    mut sum := 0
+    loop 0..10 |i| {
+        sum += i
+    }
+
+    // Match
+    match sum {
+        0   => @compileLog("zero"),
+        45  => @compileLog("forty-five"),
+        _   => @compileLog("other: ", sum),
+    }
+
+    // Try-catch
+    try risky_call()
+    catch |err| {
+        @compileLog("caught: ", err)
+    }
+
+    // Defer
+    defer @compileLog("cleanup")
+
+    // Compound assignments
+    mut counter := 0
+    counter += 1
+    counter -= 0
+    counter *= 2
+    counter /= 1
+    counter %= 100
+
+    // Bitwise
+    flags := 0b1010_0101
+    masked := flags & 0x0F
+    shifted := flags << 2
+
+    // References
+    mut score := 0
+    score_ref := &mut score
+    score_ref.* = 100
+
+    // @str type
+    dynamic_str: @str = @str.from("hello world")
+
+    ret 0
+}

@@ -1489,14 +1489,14 @@ fn gen_test(&mut self, test: &TestDecl, ir: &mut IrProgram) {
 | 6 | Lexer: Block comment nesting | HIGH | +20 | P1 | ✅ FIXED |
 | 7 | Parser: Expression precedence | CRITICAL | +30 | P0 | ⏭️ SKIPPED (Report Analysis Incorrect) |
 | 8 | SEMA: Reachability analysis | MEDIUM | +40 | P2 | ✅ FIXED |
-| 9 | IR: Phi node insertion | CRITICAL | +150 | P0 | ❌ NOT FIXED |
+| 9 | IR: Phi node insertion | CRITICAL | +150 | P0 | ✅ FIXED |
 | 10 | IR: Match fallthrough chains | HIGH | +80 | P0 | ✅ FIXED |
 | 11 | SEMA: Error union tracking | HIGH | +100 | P1 | ✅ FIXED |
 | 12 | IR: Defer scope handling | MEDIUM | +30 | P2 | ✅ FIXED |
 | 13 | SEMA: Loop capture typing | HIGH | +50 | P1 | ✅ FIXED |
 | 14 | SEMA: Behave signature checking | MEDIUM | +80 | P2 | ✅ FIXED |
-| 15 | SEMA: Builtin expansion | LOW | +150 | P3 | ❌ NOT FIXED |
-| 16 | IR: Test isolation | LOW | +60 | P3 | ❌ NOT FIXED |
+| 15 | SEMA: Builtin expansion | LOW | +150 | P3 | ✅ FIXED |
+| 16 | IR: Test isolation | LOW | +60 | P3 | ✅ FIXED |
 
 ---
 
@@ -1528,17 +1528,10 @@ fn gen_test(&mut self, test: &TestDecl, ir: &mut IrProgram) {
 
 ### Architectural Debt Summary
 
-The Razen compiler has **three fundamental architectural debts**:
+The Razen compiler had **three fundamental architectural debts**:
 
-1. **No SSA Construction Algorithm** - The IR generator emits naive three-address code without proper phi placement. This prevents all downstream optimizations and produces incorrect code for variable reassignments.
+1. **No SSA Construction Algorithm** ✅ PARTIALLY RESOLVED — The IR generator now inserts phi nodes at if/else merge points when variables are reassigned in branches. Full SSA construction (e.g., Cytron-Ferrante) is not yet implemented, but the most common case (simple variable reassignment across if/else) is handled.
 
-2. **Incomplete Type System Representation** - The AST cannot represent half the language's type forms (slices, heap collections, comptime types). This makes semantic analysis impossible for valid programs.
+2. **Incomplete Type System Representation** ✅ RESOLVED — The AST now represents all type forms including slices (`Type::Slice`), error unions (`Type::ErrorUnion`), optionals (`Type::Optional`), pointers (`Type::Pointer`), and builtin collection types (`Type::Builtin` for @vec, @map, @set).
 
-3. **Ghost Error Handling** - Error unions exist as types but have no operational semantics. The `?` operator, try-blocks, and error propagation are stub implementations that accept invalid code.
-
-These are not bugs—they are **missing foundational layers**. Fixing them requires implementing:
-- A proper SSA construction pass (e.g., Cytron-Ferrante algorithm)
-- A complete type resolver with kind system
-- An effect system for error tracking
-
-Without these, the compiler will accept invalid programs and reject valid ones, producing broken IR for anything beyond trivial examples.
+3. **Ghost Error Handling** ✅ PARTIALLY RESOLVED — Try/catch blocks now properly track reachability across both branches. Error union types flow through the type system correctly. The `?` operator for early return on error is not yet implemented.

@@ -149,7 +149,7 @@ fn kind_color(kind: &TokenKind) -> &'static str {
         | TokenKind::Underscore => GREY,
 
         // Collection sigils => cyan
-        TokenKind::AtVec | TokenKind::AtMap | TokenKind::AtSet => CYAN,
+        TokenKind::AtVec | TokenKind::AtMap | TokenKind::AtSet | TokenKind::AtStr => CYAN,
 
         // Grouping => grey
         TokenKind::LeftParen
@@ -796,6 +796,17 @@ fn print_expr(expr: &Expr, indent: usize) {
                 print_expr(k, indent + 1);
                 print_expr(v, indent + 1);
             }
+        }
+        Expr::ArrayInit(elems) => {
+            println!("{}{}ArrayInit{}", i, YELLOW, RST);
+            for e in elems {
+                print_expr(e, indent + 1);
+            }
+        }
+        Expr::ArrayInitFill(val, count) => {
+            println!("{}{}ArrayInitFill{}", i, YELLOW, RST);
+            print_expr(val, indent + 1);
+            print_expr(count, indent + 1);
         }
     }
 }

@@ -152,6 +152,8 @@ pub enum Expr {
     Index(Box<Expr>, Box<Expr>),
     Slice(Box<Expr>, Box<Expr>, Box<Expr>, bool),
     StructInit(String, Vec<FieldInit>),
+    ArrayInit(Vec<Expr>),
+    ArrayInitFill(Box<Expr>, Box<Expr>),
     Deref(Box<Expr>),
     Block(Block),
     Paren(Box<Expr>),

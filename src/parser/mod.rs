@@ -1045,6 +1045,31 @@ impl Parser {
         }
     }
 
+    fn parse_array_literal(&mut self) -> PResult<Expr> {
+        self.advance(); // consume '['
+        if self.check(TokenKind::RightBracket) {
+            self.advance();
+            return Ok(Expr::ArrayInit(Vec::new()));
+        }
+        let first = self.parse_expr()?;
+        if self.consume_if(TokenKind::Semicolon) {
+            // [value; count] — fill syntax
+            let count = self.parse_expr()?;
+            self.expect(TokenKind::RightBracket)?;
+            return Ok(Expr::ArrayInitFill(Box::new(first), Box::new(count)));
+        }
+        // [e1, e2, ...] — element list
+        let mut elems = vec![first];
+        while self.consume_if(TokenKind::Comma) {
+            if self.check(TokenKind::RightBracket) {
+                break;
+            }
+            elems.push(self.parse_expr()?);
+        }
+        self.expect(TokenKind::RightBracket)?;
+        Ok(Expr::ArrayInit(elems))
+    }
+
     pub fn parse_expr(&mut self) -> PResult<Expr> {
         let mut lhs = self.parse_expr_bp(0)?;
         if let Expr::Ident(_) = &lhs {
@@ -1277,6 +1302,9 @@ impl Parser {
                 let mut result = Expr::Paren(Box::new(expr));
                 result = self.parse_postfix(result)?;
                 return Ok(result);
+            }
+            Some(TokenKind::LeftBracket) => {
+                return self.parse_array_literal();
             }
             _ => {}
         }

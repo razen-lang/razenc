@@ -1,0 +1,267 @@
+// Sample 6: Lexer Stress Test — Every token type, escape, number format, sigil
+
+/* Block comment test
+   nested /* block */ still inside
+   final close */
+
+use std.fmt
+use std.mem.ArenaAllocator
+
+// ---- Type aliases using all integer/float widths ----
+Width1  :: type(i1)
+Width2  :: type(i2)
+Width4  :: type(i4)
+Width8  :: type(i8)
+Width16 :: type(i16)
+Width32 :: type(i32)
+Width64 :: type(i64)
+Width128 :: type(i128)
+
+UWidth1  :: type(u1)
+UWidth2  :: type(u2)
+UWidth4  :: type(u4)
+UWidth8  :: type(u8)
+UWidth16 :: type(u16)
+UWidth32 :: type(u32)
+UWidth64 :: type(u64)
+UWidth128 :: type(u128)
+
+ArchSize :: type(isize)
+UArchSize :: type(usize)
+DefaultInt :: type(int)
+DefaultUint :: type(uint)
+
+FWidth8   :: type(f8)
+FWidth16  :: type(f16)
+FWidth32  :: type(f32)
+FWidth64  :: type(f64)
+FWidth128 :: type(f128)
+DefaultFloat :: type(float)
+
+// ---- Number literals: all bases and formats ----
+DECIMAL   :: 42
+UNDER_NUM :: 1_000_000
+HEX_LOW   :: 0xff
+HEX_UP    :: 0XFF
+HEX_SEP   :: 0xAB_CD
+BIN_LOW   :: 0b1010_0101
+BIN_UP    :: 0B11110000
+OCT_LOW   :: 0o77
+OCT_UP    :: 0O644
+OCT_SEP   :: 0o1_2_3
+
+FLOAT_BASIC  :: 3.14
+FLOAT_EXP    :: 2.5e10
+FLOAT_NEGEXP :: 1.0e-3
+FLOAT_USCORE :: 1_000.5_5
+ZERO         :: 0
+
+// ---- String literals: escape sequences ----
+NEWLINE_STR  :: "line1\nline2"
+TAB_STR      :: "col1\tcol2"
+CARRIAGE_STR :: "before\rafter"
+NULL_STR     :: "before\0after"
+BACKSLASH    :: "path\\to\\file"
+DQUOTE       :: "say \"hello\""
+SQUOTE_CHAR  :: 'a'
+ESC_NL_CHAR  :: '\n'
+ESC_TAB_CHAR :: '\t'
+HEX_ESC      :: "\x41"
+UNICODE_ESC  :: "\u{00E9}"
+MIXED_ESC    :: "caf\u{00E9} \x41\0\\"
+
+// ---- All sigils ----
+INFER_VAR    := 10
+INFER_CONST  :: 20
+EXPL_VAR     : i32 = 30
+EXPL_CONST   : i32 : 40
+IMPLEMENTS   :: struct ~> Describable { }
+RET_ARROW    :: fn() -> i32 { ret 0 }
+AT_BUILTIN   :: @TypeOf(1)
+OPTIONAL_T   :: ?i32
+ERROR_UNION  :: MyError!i32
+REF_IMM      :: &x
+REF_MUT      :: &mut y
+DEREF_OP     :: ptr.*
+RANGE_EXCL   :: 0..10
+RANGE_INCL   :: 0..=10
+
+// ---- All math operators ----
+ADD  :: 1 + 2
+SUB  :: 5 - 3
+MUL  :: 4 * 6
+DIV  :: 10 / 2
+MOD  :: 7 % 3
+ADD_A  :: 10
+ADD_A += 5
+SUB_A  :: 10
+SUB_A -= 3
+MUL_A  :: 4
+MUL_A *= 2
+DIV_A  :: 20
+DIV_A /= 4
+MOD_A  :: 17
+MOD_A %= 5
+
+// ---- All comparison operators ----
+EQ_RES  :: 1 == 1
+NEQ_RES :: 1 != 2
+LT_RES  :: 1 < 2
+GT_RES  :: 2 > 1
+LTE_RES :: 1 <= 1
+GTE_RES :: 2 >= 2
+
+// ---- All logical operators ----
+AND_RES :: true && false
+OR_RES  :: true || false
+NOT_RES :: !true
+
+// ---- All bitwise operators ----
+BAND  :: 0xFF & 0x0F
+BOR   :: 0xF0 | 0x0F
+BXOR  :: 0xFF ^ 0x0F
+BNOT  :: ~0xFF
+BSHL  :: 1 << 4
+BSHR  :: 128 >> 4
+
+// ---- Access operators ----
+DOT_ACCESS :: point.x
+UNDERSCORE :: _
+PIPE_CHAR  :: |
+
+// ---- Compound assignment operators ----
+mut CA1 :: 10
+mut CA2 :: 10
+mut CA3 :: 10
+mut CA4 :: 10
+mut CA5 :: 10
+CA1 += 1
+CA2 -= 2
+CA3 *= 3
+CA4 /= 4
+CA5 %= 5
+
+// ---- All grouping tokens ----
+PARENS   :: (1 + 2)
+BRACES   :: { x := 1 }
+BRACKETS :: [1, 2, 3]
+COMMA_OP :: fn(a: i32, b: i32) -> i32 { ret a }
+SEMI_SEP :: x := 1;
+COLON_T  :: fn(a: i32) -> void { }
+QUESTION :: ?bool
+
+// ---- @vec, @map, @set, @str ----
+VEC_CONST :: @vec[1, 2, 3]
+MAP_CONST :: @map{ "a": 1, "b": 2 }
+SET_CONST :: @set{1, 2, 3}
+STR_TYPE  :: @str
+
+// ---- @ builtins (non-collection) ----
+R_TYPEOF    :: @TypeOf(42)
+R_SIZEOF    :: @SizeOf(i32)
+R_ALIGNOF   :: @AlignOf(f64)
+R_FIELDS    :: @Fields(MyStruct)
+R_ENUMCOUNT :: @EnumCount(MyEnum)
+R_TYPENAME  :: @TypeName(i32)
+R_AS        :: @as(f64, 42)
+R_BITCAST   :: @bitCast(i32, 0x0000002A)
+R_PTRCAST   :: @ptrCast(*u8, raw_ptr)
+R_INTTOPTR  :: @intToPtr(*u8, 0x1000)
+R_PTRTINT   :: @ptrToInt(ptr)
+R_MEMCPY    :: @memcpy(dst, src, 64)
+R_MEMSET    :: @memset(dst, 0, 64)
+R_MEMMOVE   :: @memmove(dst, src, 64)
+R_PAGEALLOC :: @pageAlloc(1)
+R_PAGEFREE  :: @pageFree(ptr, 1)
+R_COMPTIME  :: @comptime { 1 + 1 }
+R_CLOG      :: @compileLog("debug")
+R_CERR      :: @compileError("stop")
+R_EMBED     :: @embedFile("data.txt")
+R_PANIC     :: @panic("crash")
+R_BREAKPT   :: @breakpoint()
+R_TRAP      :: @trap()
+R_SYSCALL   :: @sysCall(1, fd, buf, len)
+R_ADDWO     :: @addWithOverflow(a, b)
+R_SUBWO     :: @subWithOverflow(a, b)
+R_MULWO     :: @mulWithOverflow(a, b)
+R_CTZ       :: @ctz(value)
+R_CLZ       :: @clz(value)
+R_POPCOUNT  :: @popCount(value)
+R_BSWAP     :: @bswap(value)
+
+// ---- Keywords as identifiers would be — ensure they are NOT identifiers ----
+if_true  :: true
+else_val :: false
+match_v  :: nil
+loop_c   :: 0
+stop_v   :: 1
+next_v   :: 2
+ret_v    :: 3
+mut_v    :: 4
+try_v    :: 5
+catch_v  :: 6
+defer_v  :: 7
+mod_v    :: 8
+use_v    :: 9
+pub_v    :: 10
+ext_v    :: 11
+fn_v     :: 12
+struct_v :: 13
+union_v  :: 14
+enum_v   :: 15
+error_v  :: 16
+behave_v :: 17
+type_v   :: 18
+test_v   :: 19
+
+// ---- Deeply nested block comment test ----
+/* outer /* mid /* inner */ mid still */ outer done */
+
+// ---- Line comment with all special chars ----
+// symbols: + - * / % = == != < > <= >= && || & | ^ ~ << >> . .. ..= .*
+//          : := :: @ ? ! ; , ( ) { } [ ] -> ~> => _ |
+
+main :: fn() -> i32 {
+    // All literal keywords
+    a := true
+    b := false
+    c := nil
+
+    // References and deref
+    mut val := 100
+    imm_ref := &val
+    mut_ref := &mut val
+    raw_ptr := *i32
+    derefed := val.*
+
+    // Optionals and error unions
+    opt_val: ?i32 = 42
+    err_val: MyError!i32 = 0
+
+    // Match with captures
+    match opt_val {
+        0 => @compileLog("zero"),
+        x => @compileLog("got: ", x),
+        _ => @compileLog("other"),
+    }
+
+    // Loops
+    loop {
+        stop
+    }
+
+    loop 0..10 |i| {
+        next
+    }
+
+    // Try-catch
+    try dangerous_op()
+    catch |e| {
+        @compileLog("error: ", e)
+    }
+
+    // Defer
+    defer cleanup()
+
+    ret 0
+}

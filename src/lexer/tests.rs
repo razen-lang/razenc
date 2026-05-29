@@ -972,3 +972,406 @@ fn test_empty_string() {
     assert_eq!(value_at(&r, 0), "\"\"");
     assert!(r.errors.is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// 76. @str token
+// ---------------------------------------------------------------------------
+#[test]
+fn test_at_str_token() {
+    let r = tokenize("@str");
+    assert_eq!(kind_at(&r, 0), TokenKind::AtStr);
+    assert_eq!(value_at(&r, 0), "@str");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 77. @vec, @map, @set still work
+// ---------------------------------------------------------------------------
+#[test]
+fn test_collection_at_tokens() {
+    let r = tokenize("@vec @map @set");
+    let ks = kinds(&r);
+    assert!(ks.contains(&TokenKind::AtVec));
+    assert!(ks.contains(&TokenKind::AtMap));
+    assert!(ks.contains(&TokenKind::AtSet));
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 78. @str not confused with @set or @st identifier
+// ---------------------------------------------------------------------------
+#[test]
+fn test_at_str_not_at_set() {
+    let r = tokenize("@str @set");
+    assert_eq!(kind_at(&r, 0), TokenKind::AtStr);
+    assert_eq!(kind_at(&r, 1), TokenKind::AtSet);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 79. Empty hex prefix produces error
+// ---------------------------------------------------------------------------
+#[test]
+fn test_empty_hex_prefix_error() {
+    let r = tokenize("0x");
+    assert!(has_error_containing(&r, "Expected hex digits"));
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+}
+
+// ---------------------------------------------------------------------------
+// 80. Empty binary prefix produces error
+// ---------------------------------------------------------------------------
+#[test]
+fn test_empty_binary_prefix_error() {
+    let r = tokenize("0b");
+    assert!(has_error_containing(&r, "Expected binary digits"));
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+}
+
+// ---------------------------------------------------------------------------
+// 81. Empty octal prefix produces error
+// ---------------------------------------------------------------------------
+#[test]
+fn test_empty_octal_prefix_error() {
+    let r = tokenize("0o");
+    assert!(has_error_containing(&r, "Expected octal digits"));
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+}
+
+// ---------------------------------------------------------------------------
+// 82. Hex prefix with valid digits still works
+// ---------------------------------------------------------------------------
+#[test]
+fn test_hex_with_valid_digits() {
+    let r = tokenize("0xFF");
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+    assert_eq!(value_at(&r, 0), "0xFF");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 83. Binary prefix with valid digits still works
+// ---------------------------------------------------------------------------
+#[test]
+fn test_binary_with_valid_digits() {
+    let r = tokenize("0b1010");
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+    assert_eq!(value_at(&r, 0), "0b1010");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 84. Octal prefix with valid digits still works
+// ---------------------------------------------------------------------------
+#[test]
+fn test_octal_with_valid_digits() {
+    let r = tokenize("0o777");
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+    assert_eq!(value_at(&r, 0), "0o777");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 85. Char literal with escape sequences work
+// ---------------------------------------------------------------------------
+#[test]
+fn test_char_with_escape_sequences() {
+    let r = tokenize("'\\n' '\\t' '\\0' '\\\\'");
+    assert_eq!(count_kind(&r, TokenKind::CharValue), 4);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 86. Char literal with hex escape
+// ---------------------------------------------------------------------------
+#[test]
+fn test_char_with_hex_escape() {
+    let r = tokenize("'\\x41'");
+    assert_eq!(kind_at(&r, 0), TokenKind::CharValue);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 87. Char literal with unicode escape
+// ---------------------------------------------------------------------------
+#[test]
+fn test_char_with_unicode_escape() {
+    let r = tokenize("'\\u{0041}'");
+    assert_eq!(kind_at(&r, 0), TokenKind::CharValue);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 88. Char literal single character
+// ---------------------------------------------------------------------------
+#[test]
+fn test_char_single_letter() {
+    let r = tokenize("'a'");
+    assert_eq!(kind_at(&r, 0), TokenKind::CharValue);
+    assert_eq!(value_at(&r, 0), "'a'");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 89. Mixed @ builtins (non-collection)
+// ---------------------------------------------------------------------------
+#[test]
+fn test_non_collection_at_builtins() {
+    let r = tokenize("@TypeOf @SizeOf @panic");
+    let ks = kinds(&r);
+    assert!(ks.contains(&TokenKind::At));
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 90. @str in expression context
+// ---------------------------------------------------------------------------
+#[test]
+fn test_at_str_in_expression() {
+    let r = tokenize("x := @str");
+    assert_eq!(kind_at(&r, 0), TokenKind::Identifier);
+    assert_eq!(kind_at(&r, 1), TokenKind::ColonEquals);
+    assert_eq!(kind_at(&r, 2), TokenKind::AtStr);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 91. String and identifier span tracking
+// ---------------------------------------------------------------------------
+#[test]
+fn test_string_span_tracking() {
+    let r = tokenize("\"hello\" world");
+    let string_tok = &r.tokens[0];
+    let ident_tok = &r.tokens[1];
+    assert_eq!(string_tok.kind, TokenKind::StringValue);
+    assert_eq!(ident_tok.kind, TokenKind::Identifier);
+    assert_eq!(string_tok.span, (0, 7));
+    assert_eq!(ident_tok.span, (8, 13));
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 92. Integer 0 alone
+// ---------------------------------------------------------------------------
+#[test]
+fn test_zero_integer() {
+    let r = tokenize("0");
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+    assert_eq!(value_at(&r, 0), "0");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 93. Float starting with dot (.5)
+// ---------------------------------------------------------------------------
+#[test]
+fn test_float_starting_with_dot() {
+    let r = tokenize(".5");
+    assert_eq!(kind_at(&r, 0), TokenKind::Dot);
+    assert_eq!(kind_at(&r, 1), TokenKind::IntegerValue);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 94. Consecutive operators
+// ---------------------------------------------------------------------------
+#[test]
+fn test_consecutive_operators() {
+    let r = tokenize("==!=<=>=");
+    let ks = kinds(&r);
+    assert_eq!(ks[0], TokenKind::EqualEqual);
+    assert_eq!(ks[1], TokenKind::NotEqual);
+    assert_eq!(ks[2], TokenKind::LessEqual);
+    assert_eq!(ks[3], TokenKind::GreaterEqual);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 95. Deeply nested block comments
+// ---------------------------------------------------------------------------
+#[test]
+fn test_deeply_nested_block_comments() {
+    let r = tokenize("/* a /* b /* c */ b */ a */");
+    assert_eq!(r.tokens.len(), 1);
+    assert_eq!(r.tokens[0].kind, TokenKind::BlockComment);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 96. @str with dot access
+// ---------------------------------------------------------------------------
+#[test]
+fn test_at_str_with_dot() {
+    let r = tokenize("@str.from");
+    assert_eq!(kind_at(&r, 0), TokenKind::AtStr);
+    assert_eq!(kind_at(&r, 1), TokenKind::Dot);
+    assert_eq!(kind_at(&r, 2), TokenKind::Identifier);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 97. Hex integer with underscores
+// ---------------------------------------------------------------------------
+#[test]
+fn test_hex_with_underscores() {
+    let r = tokenize("0xFF_FF");
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+    assert_eq!(value_at(&r, 0), "0xFFFF");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 98. Binary integer with underscores
+// ---------------------------------------------------------------------------
+#[test]
+fn test_binary_with_underscores() {
+    let r = tokenize("0b1010_0101");
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+    assert_eq!(value_at(&r, 0), "0b10100101");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 99. Octal integer with underscores
+// ---------------------------------------------------------------------------
+#[test]
+fn test_octal_with_underscores() {
+    let r = tokenize("0o77_77");
+    assert_eq!(kind_at(&r, 0), TokenKind::IntegerValue);
+    assert_eq!(value_at(&r, 0), "0o7777");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 100. Full Razen program tokenization
+// ---------------------------------------------------------------------------
+#[test]
+fn test_full_program() {
+    let source = r#"
+use std.testing.assert
+
+Player :: struct {
+    pub score: i32,
+}
+
+main :: fn() -> i32 {
+    mut p := Player{ score: 10 }
+    increment_score(&mut p)
+    assert(p.score, 20)
+    ret 0
+}
+"#;
+    let r = tokenize(source);
+    assert!(r.errors.is_empty());
+    assert!(count_kind(&r, TokenKind::Use) > 0);
+    assert!(count_kind(&r, TokenKind::Struct) > 0);
+    assert!(count_kind(&r, TokenKind::Fn) > 0);
+    assert!(count_kind(&r, TokenKind::Pub) > 0);
+    assert!(count_kind(&r, TokenKind::Mut) > 0);
+    assert!(count_kind(&r, TokenKind::Ret) > 0);
+}
+
+// ---------------------------------------------------------------------------
+// 101. Double backslash in string produces single backslash
+// ---------------------------------------------------------------------------
+#[test]
+fn test_double_backslash_in_string() {
+    let r = tokenize(r#""path\\to\\file""#);
+    assert_eq!(kind_at(&r, 0), TokenKind::StringValue);
+    assert_eq!(value_at(&r, 0), r#""path\\to\\file""#);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 102. Escaped quote in string does not close the string
+// ---------------------------------------------------------------------------
+#[test]
+fn test_escaped_quote_in_string() {
+    let r = tokenize(r#""say \"hello\"""#);
+    assert_eq!(kind_at(&r, 0), TokenKind::StringValue);
+    assert_eq!(value_at(&r, 0), r#""say \"hello\"""#);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 103. Triple backslash in string
+// ---------------------------------------------------------------------------
+#[test]
+fn test_triple_backslash_in_string() {
+    // \\\\ = two escaped backslashes, then 'b' is regular
+    let r = tokenize(r#""a\\\\b""#);
+    assert_eq!(kind_at(&r, 0), TokenKind::StringValue);
+    assert_eq!(value_at(&r, 0), r#""a\\\\b""#);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 104. Backslash at end of string (incomplete escape)
+// ---------------------------------------------------------------------------
+#[test]
+fn test_backslash_at_end_of_string() {
+    let r = tokenize("\"abc\\");
+    assert!(has_error_containing(&r, "Unclosed string"));
+}
+
+// ---------------------------------------------------------------------------
+// 105. All valid escape sequences in one string
+// ---------------------------------------------------------------------------
+#[test]
+fn test_all_valid_escapes_together() {
+    let r = tokenize(r#""\n\t\r\0\\\"\'\x41\u{0041}""#);
+    assert_eq!(kind_at(&r, 0), TokenKind::StringValue);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 106. Backslash followed by invalid escape char
+// ---------------------------------------------------------------------------
+#[test]
+fn test_invalid_escape_after_backslash() {
+    let r = tokenize(r#""\q""#);
+    assert!(has_error_containing(&r, "Invalid escape"));
+}
+
+// ---------------------------------------------------------------------------
+// 107. Char literal with double backslash
+// ---------------------------------------------------------------------------
+#[test]
+fn test_char_double_backslash() {
+    let r = tokenize("'\\\\'");
+    assert_eq!(kind_at(&r, 0), TokenKind::CharValue);
+    assert_eq!(value_at(&r, 0), "'\\\\'");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 108. Char literal with escaped single quote
+// ---------------------------------------------------------------------------
+#[test]
+fn test_char_escaped_single_quote() {
+    let r = tokenize("'\\''");
+    assert_eq!(kind_at(&r, 0), TokenKind::CharValue);
+    assert_eq!(value_at(&r, 0), "'\\''");
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 109. Mixed escapes: backslash, quote, newline
+// ---------------------------------------------------------------------------
+#[test]
+fn test_mixed_escapes_complex() {
+    let r = tokenize(r#""line\\n\"tab\t""#);
+    assert_eq!(kind_at(&r, 0), TokenKind::StringValue);
+    assert!(r.errors.is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// 110. String with only backslashes
+// ---------------------------------------------------------------------------
+#[test]
+fn test_string_only_backslashes() {
+    let r = tokenize(r#""\\\\""#);
+    assert_eq!(kind_at(&r, 0), TokenKind::StringValue);
+    assert_eq!(value_at(&r, 0), r#""\\\\""#);
+    assert!(r.errors.is_empty());
+}

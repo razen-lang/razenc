@@ -596,6 +596,29 @@ impl TypeChecker {
                 Some(TypeInfo::Array(Box::new(TypeInfo::Void), None))
             }
             Expr::StructInit(name, fields) => self.check_struct_init(name, fields, table),
+            Expr::ArrayInit(elems) => {
+                let mut elem_type = None;
+                for e in elems {
+                    let et = self.check_expr(e, table);
+                    if let Some(ref et) = et {
+                        if elem_type.is_none() {
+                            elem_type = Some(et.clone());
+                        }
+                    }
+                }
+                Some(TypeInfo::Array(
+                    Box::new(elem_type.unwrap_or(TypeInfo::Void)),
+                    Some(elems.len() as u64),
+                ))
+            }
+            Expr::ArrayInitFill(val, count) => {
+                let vt = self.check_expr(val, table);
+                self.check_expr(count, table);
+                Some(TypeInfo::Array(
+                    Box::new(vt.unwrap_or(TypeInfo::Void)),
+                    None,
+                ))
+            }
             Expr::Deref(e) => self.check_deref(e, table),
             Expr::Block(b) => {
                 table.push_scope();
@@ -1025,11 +1048,51 @@ impl TypeChecker {
                 if args.len() != 3 {
                     self.error(
                         "SEMA-0017",
-                        format!("Builtin '@{}' requires 3 arguments", bn),
+                        format!("Builtin '@{}' requires 3 arguments (dest, src, count)", bn),
                     );
+                    for a in args {
+                        self.check_expr(a, table);
+                    }
+                    return Some(TypeInfo::Void);
                 }
-                for a in args {
-                    self.check_expr(a, table);
+                let dest_type = self.check_expr(&args[0], table);
+                let src_type = self.check_expr(&args[1], table);
+                let count_type = self.check_expr(&args[2], table);
+                // Validate dest/src are pointers or references
+                if let Some(ref dt) = dest_type {
+                    if !dt.is_pointer() && !dt.is_reference() && !dt.is_noret() {
+                        self.error(
+                            "SEMA-0023",
+                            format!(
+                                "Builtin '@{}' first argument must be a pointer or reference, found '{}'",
+                                bn, dt.display()
+                            ),
+                        );
+                    }
+                }
+                if let Some(ref st) = src_type {
+                    if !st.is_pointer() && !st.is_reference() && !st.is_noret() {
+                        self.error(
+                            "SEMA-0023",
+                            format!(
+                                "Builtin '@{}' second argument must be a pointer or reference, found '{}'",
+                                bn, st.display()
+                            ),
+                        );
+                    }
+                }
+                // Validate count is integer
+                if let Some(ref ct) = count_type {
+                    if !ct.is_integer() && !ct.is_noret() {
+                        self.error(
+                            "SEMA-0023",
+                            format!(
+                                "Builtin '@{}' third argument must be an integer, found '{}'",
+                                bn,
+                                ct.display()
+                            ),
+                        );
+                    }
                 }
                 Some(TypeInfo::Void)
             }
@@ -1198,6 +1261,61 @@ impl TypeChecker {
                     self.error("SEMA-0017", "Builtin '@Fields' requires 1 argument".into());
                 }
                 Some(TypeInfo::Array(Box::new(TypeInfo::TypeMeta), None))
+            }
+            "assert" => {
+                if args.is_empty() || args.len() > 2 {
+                    self.error(
+                        "SEMA-0017",
+                        "Builtin '@assert' requires 1 or 2 arguments (condition, message?)".into(),
+                    );
+                }
+                if !args.is_empty() {
+                    let ct = self.check_expr(&args[0], table);
+                    if let Some(ref t) = ct {
+                        if !t.is_bool() && !t.is_noret() {
+                            self.error(
+                                "SEMA-0017",
+                                format!(
+                                    "Builtin '@assert' first argument must be bool, found '{}'",
+                                    t.display()
+                                ),
+                            );
+                        }
+                    }
+                }
+                if args.len() > 1 {
+                    self.check_expr(&args[1], table);
+                }
+                Some(TypeInfo::Void)
+            }
+            "assertEq" => {
+                if args.len() < 2 || args.len() > 3 {
+                    self.error(
+                        "SEMA-0017",
+                        "Builtin '@assertEq' requires 2 or 3 arguments (left, right, message?)"
+                            .into(),
+                    );
+                }
+                if args.len() >= 2 {
+                    let lt = self.check_expr(&args[0], table);
+                    let rt = self.check_expr(&args[1], table);
+                    if let (Some(l), Some(r)) = (&lt, &rt) {
+                        if !l.is_assignable_to(r) && !l.is_noret() && !r.is_noret() {
+                            self.error(
+                                "SEMA-0017",
+                                format!(
+                                    "Builtin '@assertEq' arguments have incompatible types: '{}' and '{}'",
+                                    l.display(),
+                                    r.display()
+                                ),
+                            );
+                        }
+                    }
+                }
+                if args.len() > 2 {
+                    self.check_expr(&args[2], table);
+                }
+                Some(TypeInfo::Void)
             }
             _ => {
                 self.error("SEMA-0017", format!("Unknown builtin '@{}'", bn));

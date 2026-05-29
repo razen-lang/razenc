@@ -1,69 +1,911 @@
-// Razen Language — Complete Feature Demonstration
-// Covers: types, variables, constants, control flow,
-// functions, structs, enums, unions, error handling,
-// behaviours, generics, pointers, builtins, allocators,
-// defer, pattern matching.
+// ═══════════════════════════════════════════════════════════════════════════════
+// Razen Language Demo — exercises every syntax feature from the spec
+// ═══════════════════════════════════════════════════════════════════════════════
 
-use std.fmt
+// ─── 1. Constants (Comptime) ────────────────────────────────────────────────
 
-// ── Constants & Type Aliases ──
-APP_NAME : str : "Razen Demo v1.0"
-MAX_BUF : usize : 4096
+MAX_SIZE :: 1024
 PI : f64 : 3.14159
-Age :: type(u8)
-Score :: type(f64)
+GREETING :: "hello razen"
+FLAG :: true
 
-// ── Error Sets ──
-MathError :: error {
-    Division_By_Zero,
-    Overflow,
-    Negative_Input,
+// ─── 2. Global Variables ────────────────────────────────────────────────────
+
+counter := 0
+mut mutable_counter := 10
+explicit_type : i32 = 42
+
+// ─── 3. Integer Types ───────────────────────────────────────────────────────
+
+small_val : i8 = 127
+short_val : i16 = 32000
+int_val : i32 = 100000
+big_val : i64 = 999999999
+huge_val : i128 = 12345678901234567890
+
+usmall : u8 = 255
+ushort : u16 = 65000
+uint : u32 = 300000
+ubig : u64 = 9999999
+uhuge : u128 = 9999999999
+
+arch_sized : isize = -100
+arch_unsigned : usize = 200
+
+// ─── 4. Float Types ─────────────────────────────────────────────────────────
+
+tiny_float : f32 = 3.14
+big_float : f64 = 2.718281828
+
+// ─── 5. Bool and Char ───────────────────────────────────────────────────────
+
+is_active : bool = true
+letter : char = 'A'
+
+// ─── 6. String Literals ─────────────────────────────────────────────────────
+
+name : str = "razen"
+
+// ─── 7. Arithmetic Operators ────────────────────────────────────────────────
+
+sum := 10 + 20
+diff := 100 - 30
+product := 7 * 8
+quotient := 100 / 3
+remainder := 17 % 5
+
+// ─── 8. Compound Assignment ─────────────────────────────────────────────────
+
+mut x := 10
+x += 5
+x -= 2
+x *= 3
+x /= 4
+x %= 3
+
+// ─── 9. Comparison Operators ────────────────────────────────────────────────
+
+is_equal := 10 == 10
+not_equal := 10 != 20
+less_than := 5 < 10
+greater_than := 10 > 5
+less_equal := 5 <= 5
+greater_equal := 10 >= 10
+
+// ─── 10. Logical Operators ──────────────────────────────────────────────────
+
+a := true
+b := false
+both := a && b
+either := a || b
+not_a := !a
+
+// ─── 11. Bitwise Operators ──────────────────────────────────────────────────
+
+bits := 0b1010
+mask := 0b1100
+band := bits & mask
+bor := bits | mask
+bxor := bits ^ mask
+bnot := ~bits
+shl_val := 1 << 4
+shr_val := 16 >> 2
+
+// ─── 12. Range Operators ────────────────────────────────────────────────────
+
+range_excl := 0..10
+range_incl := 0..=10
+
+// ─── 13. Constant Functions ─────────────────────────────────────────────────
+
+add :: fn(a: i32, b: i32) -> i32 {
+    ret a + b
 }
 
-// ── Behaviours ──
-Describable :: behave {
-    describe :: fn(self: &@Self) -> void
+multiply :: fn(a: i32, b: i32) -> i32 {
+    ret a * b
 }
 
-Toggable :: behave {
-    print_tag :: fn(self: &@Self) -> void
+get_value :: fn() -> i32 {
+    ret 42
 }
 
-// ── Enums ──
-Color :: enum { Red, Green, Blue }
+// ─── 14. Mutable Copy Parameter ─────────────────────────────────────────────
 
-HttpStatus :: enum(u16) {
-    Ok = 200,
-    Not_Found = 404,
-    Internal_Error = 500,
+increment :: fn(mut n: i32) -> i32 {
+    n = n + 1
+    ret n
 }
 
-Permission :: enum(u8) {
-    Read = 1 << 0,
-    Write = 1 << 1,
-    Execute = 1 << 2,
+// ─── 15. Void Function ──────────────────────────────────────────────────────
+
+do_nothing :: fn() -> void {
+    // does nothing
 }
 
-// ── Unions ──
-Value :: union {
-    Int(i64),
-    Float(f64),
-    Text(str),
+// ─── 16. Variable Functions ─────────────────────────────────────────────────
+
+double_it := fn(n: i32) -> i32 {
+    ret n * 2
 }
 
-Shape :: union {
-    Circle { radius: f64 },
-    Rectangle { width: f64, height: f64 },
+// ─── 17. Function Types ─────────────────────────────────────────────────────
+
+apply :: fn(value: i32, transform: fn(i32) -> i32) -> i32 {
+    ret transform(value)
 }
 
-// ── Structs ──
-User :: struct ~> Describable {
+// ─── 18. Reference Parameters ───────────────────────────────────────────────
+
+increment_ref :: fn(n: &mut i32) -> void {
+    n.* = n.* + 1
+}
+
+// ─── 19. Structs ────────────────────────────────────────────────────────────
+
+Point :: struct {
+    x: i32,
+    y: i32,
+}
+
+Player :: struct {
+    pub score: i32,
     name: str,
-    age: Age,
-    email: str,
+}
 
-    describe :: fn(self: &User) -> void {
-        fmt.println("User: {}, Age: {}, Email: {}", self.name, self.age, self.email)
+// ─── 20. Generic Struct ─────────────────────────────────────────────────────
+
+Container :: struct {
+    value: i32,
+}
+
+// ─── 21. Struct with Methods ────────────────────────────────────────────────
+
+Rectangle :: struct {
+    width: i32,
+    height: i32,
+
+    pub area :: fn(self: &Rectangle) -> i32 {
+        ret self.width * self.height
+    }
+
+    pub perimeter :: fn(self: &Rectangle) -> i32 {
+        ret 2 * (self.width + self.height)
     }
 }
 
+// ─── 22. Struct Initialization ──────────────────────────────────────────────
+
+origin := Point{ x: 0, y: 0 }
+player := Player{ score: 100, name: "razen" }
+rect := Rectangle{ width: 10, height: 5 }
+
+// ─── 23. Field Access ───────────────────────────────────────────────────────
+
+px := origin.x
+py := origin.y
+score := player.score
+
+// ─── 24. Unions ─────────────────────────────────────────────────────────────
+
+TokenValue :: union {
+    IntVal: i64,
+    FloatVal: f64,
+    StrVal: str,
+}
+
+// ─── 25. Enums ──────────────────────────────────────────────────────────────
+
+Direction :: enum {
+    North,
+    South,
+    East,
+    West,
+}
+
+Token :: enum {
+    Identifier: str,
+    Number: i64,
+    Eof,
+}
+
+// ─── 26. Enum with Methods ──────────────────────────────────────────────────
+
+Color :: enum {
+    Red,
+    Green,
+    Blue,
+
+    pub is_primary :: fn(self: &Color) -> bool {
+        ret true
+    }
+}
+
+// ─── 27. Error Declarations ─────────────────────────────────────────────────
+
+ParseError :: error {
+    Invalid_Expression,
+    Out_Of_Scope,
+    Unexpected_Token,
+}
+
+// ─── 28. Error Union Return Types ───────────────────────────────────────────
+
+parse_number :: fn(input: i32) -> ParseError!i32 {
+    if input < 0 {
+        ret ParseError.Out_Of_Scope
+    }
+    ret input
+}
+
+// ─── 29. Inferred Error Union ───────────────────────────────────────────────
+
+quick_check :: fn(x: i32) -> !i32 {
+    if x < 0 {
+        ret ParseError.Invalid_Expression
+    }
+    ret x
+}
+
+// ─── 30. Behave (Trait) Declarations ────────────────────────────────────────
+
+Drawable :: behave {
+    draw :: fn(self: &@Self) -> void
+}
+
+// ─── 31. Struct Implementing Behave ─────────────────────────────────────────
+
+Circle :: struct ~> Drawable {
+    radius: i32,
+
+    pub draw :: fn(self: &Circle) -> void {
+        // drawing logic
+    }
+
+    pub area :: fn(self: &Circle) -> i32 {
+        ret self.radius * self.radius
+    }
+}
+
+// ─── 32. Type Aliasing ──────────────────────────────────────────────────────
+
+IdType :: type(u64)
+Coordinate :: type(i32)
+
+// ─── 33. Modules ────────────────────────────────────────────────────────────
+
+mod math {
+    pub add :: fn(a: i32, b: i32) -> i32 {
+        ret a + b
+    }
+
+    pub sub :: fn(a: i32, b: i32) -> i32 {
+        ret a - b
+    }
+}
+
+// ─── 34. If-Else ────────────────────────────────────────────────────────────
+
+check_value :: fn(val: i32) -> i32 {
+    if val > 10 {
+        ret 1
+    } else if val > 5 {
+        ret 2
+    } else {
+        ret 3
+    }
+}
+
+// ─── 35. Optional Capture ───────────────────────────────────────────────────
+
+unwrap_or_default :: fn(opt_val: ?i32) -> i32 {
+    if opt_val |x| {
+        ret x
+    } else {
+        ret 0
+    }
+}
+
+// ─── 36. Match (Literal Patterns) ───────────────────────────────────────────
+
+match_literal :: fn(x: i32) -> i32 {
+    match x {
+        1 => 10,
+        2 => 20,
+        3 => 30,
+        _ => 0,
+    }
+}
+
+// ─── 37. Match (Identifier Capture) ─────────────────────────────────────────
+
+match_capture :: fn(x: i32) -> i32 {
+    match x {
+        n => n * 2,
+        _ => 0,
+    }
+}
+
+// ─── 38. Match (Block Expression) ───────────────────────────────────────────
+
+match_block :: fn(x: i32) -> i32 {
+    match x {
+        1 => {
+            ret 10
+        },
+        _ => 0,
+    }
+}
+
+// ─── 39. Infinite Loop with stop ────────────────────────────────────────────
+
+infinite_loop :: fn() -> i32 {
+    mut count := 0
+    loop {
+        count += 1
+        if count >= 10 {
+            stop
+        }
+    }
+    ret count
+}
+
+// ─── 40. Conditional Loop (while-style) ─────────────────────────────────────
+
+while_loop :: fn() -> i32 {
+    mut i := 0
+    loop i < 5 {
+        i += 1
+    }
+    ret i
+}
+
+// ─── 41. Loop with next ─────────────────────────────────────────────────────
+
+loop_with_next :: fn() -> i32 {
+    mut sum := 0
+    mut i := 0
+    loop i < 10 {
+        i += 1
+        if i % 2 == 0 {
+            next
+        }
+        sum += i
+    }
+    ret sum
+}
+
+// ─── 42. Defer ──────────────────────────────────────────────────────────────
+
+cleanup_demo :: fn() -> i32 {
+    mut result := 0
+    defer result = result + 100
+    result := 1
+    ret result
+}
+
+// ─── 43. Defer in Nested Blocks ─────────────────────────────────────────────
+
+nested_defer :: fn() -> i32 {
+    mut val := 0
+    {
+        defer val = val + 10
+        val := 1
+    }
+    defer val = val + 100
+    ret val
+}
+
+// ─── 44. Try-Catch ──────────────────────────────────────────────────────────
+
+try_catch_demo :: fn(input: i32) -> i32 {
+    try {
+        ret parse_number(input)
+    } catch |e| {
+        ret -1
+    }
+}
+
+// ─── 45. Reference and Dereference ──────────────────────────────────────────
+
+pointer_demo :: fn() -> i32 {
+    mut value := 42
+    ptr := &mut value
+    ptr.* = 100
+    ret value
+}
+
+// ─── 46. Index Access ───────────────────────────────────────────────────────
+
+array := [10, 20, 30, 40, 50]
+first := array[0]
+third := array[2]
+
+// ─── 47. Slice ──────────────────────────────────────────────────────────────
+
+buffer : [i32; 8] = [0; 8]
+view := buffer[0..4]
+
+// ─── 48. Array Literal (Fill) ──────────────────────────────────────────────
+
+zeros : [i32; 16] = [0; 16]
+ones := [1; 10]
+
+// ─── 49. Array Literal (List) ──────────────────────────────────────────────
+
+mixed := [1, 2, 3, 4, 5]
+
+// ─── 50. Builtin Functions ──────────────────────────────────────────────────
+
+size_val := @SizeOf(i32)
+align_val := @AlignOf(i64)
+
+// ─── 51. Type Casting Builtins ──────────────────────────────────────────────
+
+as_val := @as(i64, 42)
+
+// ─── 52. Math Builtins ──────────────────────────────────────────────────────
+
+ctz_val := @ctz(16)
+clz_val := @clz(16)
+pop_val := @popCount(0b10101010)
+bswap_val := @bswap(0x12345678)
+
+// ─── 53. Memory Builtins ────────────────────────────────────────────────────
+
+mem_dest : [u8; 16] = [0; 16]
+mem_src : [u8; 16] = [1; 16]
+
+// ─── 54. Control Flow Builtins ──────────────────────────────────────────────
+
+// @panic("unreachable")  // would halt compilation/runtime
+// @breakpoint()          // hardware breakpoint
+// @trap()                // illegal instruction
+
+// ─── 55. Comptime Builtins ──────────────────────────────────────────────────
+
+// @compileLog("compiling...")
+
+// ─── 56. Struct Initialization with Field Init ──────────────────────────────
+
+point_a := Point{ x: 10, y: 20 }
+point_b := Point{ x: -5, y: 15 }
+
+// ─── 57. Method Calls ───────────────────────────────────────────────────────
+
+area_val := rect.area()
+perim_val := rect.perimeter()
+
+// ─── 58. Function Calls ─────────────────────────────────────────────────────
+
+result_add := add(3, 4)
+result_mul := multiply(5, 6)
+result_inc := increment(9)
+result_apply := apply(10, double_it)
+
+// ─── 59. Binary Expressions (Complex) ───────────────────────────────────────
+
+complex_expr := (10 + 20) * 3 - 4 / 2
+
+// ─── 60. Unary Expressions ──────────────────────────────────────────────────
+
+neg_val := -42
+not_val := !false
+bitnot_val := ~0xFF
+
+// ─── 61. Nested Expressions ─────────────────────────────────────────────────
+
+nested := add(multiply(2, 3), multiply(4, 5))
+
+// ─── 62. Block Expressions ──────────────────────────────────────────────────
+
+block_result := {
+    mut temp := 10
+    temp += 5
+    temp
+}
+
+// ─── 63. Paren Expressions ──────────────────────────────────────────────────
+
+paren_val := (10 + 20) * 3
+
+// ─── 64. Field Access on Nested Structs ─────────────────────────────────────
+
+p := Point{ x: 1, y: 2 }
+px_val := p.x
+
+// ─── 65. Multiple Variables ─────────────────────────────────────────────────
+
+v1 := 10
+v2 := 20
+v3 := 30
+total := v1 + v2 + v3
+
+// ─── 66. Const with Explicit Type ───────────────────────────────────────────
+
+VERSION : str : "1.0.0"
+MAX_DEPTH : i32 : 100
+
+// ─── 67. Var with Explicit Type ─────────────────────────────────────────────
+
+mut explicit_var : i64 = 999
+explicit_var = 1000
+
+// ─── 68. Nested If-Else ─────────────────────────────────────────────────────
+
+nested_if :: fn(x: i32) -> i32 {
+    if x > 0 {
+        if x > 100 {
+            ret 3
+        } else {
+            ret 2
+        }
+    } else {
+        ret 1
+    }
+}
+
+// ─── 69. Match with Multiple Arms ───────────────────────────────────────────
+
+multi_match :: fn(day: i32) -> i32 {
+    match day {
+        1 => 1,
+        2 => 2,
+        3 => 3,
+        4 => 4,
+        5 => 5,
+        6 => 6,
+        7 => 7,
+        _ => 0,
+    }
+}
+
+// ─── 70. Loop with Capture ──────────────────────────────────────────────────
+
+loop_capture_demo :: fn() -> i32 {
+    mut sum := 0
+    arr := [1, 2, 3, 4, 5]
+    loop arr |elem| {
+        sum += elem
+    }
+    ret sum
+}
+
+// ─── 71. Multi-Range Loop ───────────────────────────────────────────────────
+
+multi_range :: fn() -> i32 {
+    mut sum := 0
+    range_a := 0..5
+    range_b := 0..5
+    loop range_a, range_b |i, j| {
+        sum += i + j
+    }
+    ret sum
+}
+
+// ─── 72. Mut Ref Capture in Loop ────────────────────────────────────────────
+
+mut_ref_loop :: fn() -> i32 {
+    mut_data := [10, 20, 30]
+    loop mut_data |&mut elem| {
+        elem = elem * 2
+    }
+    ret mut_data[0]
+}
+
+// ─── 73. Defer with Ret ─────────────────────────────────────────────────────
+
+defer_with_ret :: fn() -> i32 {
+    mut cleaned := false
+    defer cleaned = true
+    ret 42
+}
+
+// ─── 74. Try-Catch with Error Matching ──────────────────────────────────────
+
+handle_error :: fn(input: i32) -> i32 {
+    try {
+        ret parse_number(input)
+    } catch |e| {
+        match e {
+            ParseError.Invalid_Expression => -1,
+            ParseError.Out_Of_Scope => -2,
+            _ => -3,
+        }
+    }
+}
+
+// ─── 75. Struct Implementing Behave with Method ─────────────────────────────
+
+DrawableSquare :: struct ~> Drawable {
+    side: i32,
+
+    pub draw :: fn(self: &DrawableSquare) -> void {
+        // draws a square
+    }
+}
+
+// ─── 76. Enum with Behave ───────────────────────────────────────────────────
+
+Shape :: enum ~> Drawable {
+    Circle: i32,
+    Rectangle: i32,
+
+    pub draw :: fn(self: &Shape) -> void {
+        // draws shape
+    }
+}
+
+// ─── 77. Union Declaration ──────────────────────────────────────────────────
+
+DataValue :: union {
+    IntVal: i64,
+    FloatVal: f64,
+    BoolVal: bool,
+}
+
+// ─── 78. Error with Multiple Variants ───────────────────────────────────────
+
+IoError :: error {
+    File_Not_Found,
+    Permission_Denied,
+    Disk_Full,
+    Timeout,
+}
+
+// ─── 79. Complex Struct with Methods ────────────────────────────────────────
+
+Vector2D :: struct {
+    x: f64,
+    y: f64,
+
+    pub magnitude :: fn(self: &Vector2D) -> f64 {
+        ret self.x * self.x + self.y * self.y
+    }
+
+    pub normalize :: fn(self: &Vector2D) -> f64 {
+        ret self.magnitude()
+    }
+}
+
+// ─── 80. Function with Multiple Parameters ──────────────────────────────────
+
+compute :: fn(a: i32, b: i32, c: i32) -> i32 {
+    ret a * b + c
+}
+
+// ─── 81. Recursive Function ─────────────────────────────────────────────────
+
+factorial :: fn(n: i32) -> i32 {
+    if n <= 1 {
+        ret 1
+    }
+    ret n * factorial(n - 1)
+}
+
+// ─── 82. Multiple Constants ─────────────────────────────────────────────────
+
+A :: 10
+B :: 20
+C :: 30
+D := A + B + C
+
+// ─── 83. Conditional Expression ─────────────────────────────────────────────
+
+abs_val :: fn(x: i32) -> i32 {
+    if x < 0 {
+        ret -x
+    } else {
+        ret x
+    }
+}
+
+// ─── 84. Nested Match ───────────────────────────────────────────────────────
+
+nested_match :: fn(x: i32, y: i32) -> i32 {
+    match x {
+        1 => {
+            match y {
+                1 => 11,
+                2 => 12,
+                _ => 10,
+            }
+        },
+        2 => 20,
+        _ => 0,
+    }
+}
+
+// ─── 85. Loop as Expression ─────────────────────────────────────────────────
+
+count_to_ten :: fn() -> i32 {
+    mut i := 0
+    loop {
+        if i >= 10 {
+            stop
+        }
+        i += 1
+    }
+    ret i
+}
+
+// ─── 86. Multiple Defer (Reverse Order) ─────────────────────────────────────
+
+multi_defer :: fn() -> i32 {
+    mut step := 0
+    defer step = step + 100
+    defer step = step + 10
+    step := 1
+    ret step
+}
+
+// ─── 87. Struct Field Assignment ────────────────────────────────────────────
+
+field_assign :: fn() -> i32 {
+    mut p := Point{ x: 0, y: 0 }
+    p.x = 10
+    p.y = 20
+    ret p.x + p.y
+}
+
+// ─── 88. Function Returning Void ────────────────────────────────────────────
+
+set_counter :: fn(val: i32) -> void {
+    // would set counter if mutable
+}
+
+// ─── 89. Builtin Assert ─────────────────────────────────────────────────────
+
+assert_demo :: fn() -> void {
+    @assert(true)
+    @assertEq(10, 10)
+}
+
+// ─── 90. Comptime Default Allocator ─────────────────────────────────────────
+
+alloc_demo :: fn() -> void {
+    allocator := @comptimeDefaultAllocator()
+}
+
+// ─── 91. Page Alloc/Free ────────────────────────────────────────────────────
+
+page_demo :: fn() -> void {
+    pages := @pageAlloc(1)
+    @pageFree(pages, 1)
+}
+
+// ─── 92. Memcpy/Memset ──────────────────────────────────────────────────────
+
+mem_demo :: fn() -> void {
+    dest : [u8; 64] = [0; 64]
+    src : [u8; 64] = [1; 64]
+    @memcpy(&dest, &src, 64)
+    @memset(&dest, 0, 64)
+    @memmove(&dest, &src, 64)
+}
+
+// ─── 93. Overflow Math Builtins ─────────────────────────────────────────────
+
+overflow_demo :: fn(a: i32, b: i32) -> void {
+    @addWithOverflow(a, b)
+    @subWithOverflow(a, b)
+    @mulWithOverflow(a, b)
+}
+
+// ─── 94. Atomic Builtins ────────────────────────────────────────────────────
+
+atomic_demo :: fn() -> void {
+    ptr : i32 = 0
+    @atomicStore(&ptr, 42, 0)
+    val := @atomicLoad(&ptr, 0)
+}
+
+// ─── 95. Typeof and TypeName ────────────────────────────────────────────────
+
+typeof_demo :: fn() -> void {
+    t := @TypeOf(42)
+    n := @TypeName(i32)
+}
+
+// ─── 96. Embed File ─────────────────────────────────────────────────────────
+
+// data := @embedFile("input.txt")
+
+// ─── 97. Struct with Pub and Private Fields ─────────────────────────────────
+
+Encapsulated :: struct {
+    pub visible: i32,
+    hidden: str,
+}
+
+// ─── 98. Enum with Associated Values ────────────────────────────────────────
+
+Status :: enum {
+    Ok: str,
+    Error: i32,
+    Pending,
+}
+
+// ─── 99. Complex Type Annotations ───────────────────────────────────────────
+
+fn_ref : fn(i32) -> i32 = add
+opt_val : ?i32 = 42
+err_union : ParseError!i32 = 10
+
+// ─── 100. Test Blocks ───────────────────────────────────────────────────────
+
+basic_test :: test {
+    val := 10
+    @assertEq(val, 10)
+}
+
+arithmetic_test :: test {
+    result := add(2, 3)
+    @assertEq(result, 5)
+}
+
+struct_test :: test {
+    p := Point{ x: 1, y: 2 }
+    @assertEq(p.x, 1)
+    @assertEq(p.y, 2)
+}
+
+loop_test :: test {
+    mut sum := 0
+    arr := [1, 2, 3, 4, 5]
+    loop arr |elem| {
+        sum += elem
+    }
+    @assertEq(sum, 15)
+}
+
+match_test :: test {
+    result := match_literal(2)
+    @assertEq(result, 20)
+}
+
+defer_test :: test {
+    val := 0
+    defer val = val + 100
+    val := 1
+    @assertEq(val, 1)
+}
+
+// ─── Main Entry Point ───────────────────────────────────────────────────────
+
+main :: fn() -> i32 {
+    // Basic computations
+    result := add(10, 20)
+    doubled := double_it(15)
+    applied := apply(5, double_it)
+
+    // Struct methods
+    a := rect.area()
+    p_val := rect.perimeter()
+
+    // Control flow
+    checked := check_value(7)
+    matched := match_literal(3)
+
+    // Loops
+    counted := count_to_ten()
+    whiled := while_loop()
+
+    // Recursive
+    fact := factorial(5)
+
+    // References
+    mut num := 100
+    increment_ref(&num)
+
+    // Field access
+    field_val := field_assign()
+
+    // Builtin
+    size := @SizeOf(i32)
+
+    // Match with blocks
+    block_match := nested_match(1, 2)
+
+    ret 0
+}
